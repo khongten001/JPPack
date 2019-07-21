@@ -6,11 +6,13 @@ uses
   System.Classes,
 
   JPP.Types,
-  JPP.BasicPanel, JPP.Panel,
+  JPP.BasicPanel, JPP.Panel, JPP.SimplePanel,
   JPP.BasicPngButton, JPP.PngButton, JPP.BasicSpeedButton,
-  JPP.ColorComboBox, JPP.ColorListBox,
-  JPP.LinkLabel, JPP.Timer, JPP.StorageCtrl,
-  JPP.FormIniStorage
+  JPP.ColorComboBox, JPP.ColorListBox, JPP.ColorSwatch,
+  JPP.LinkLabel, JPP.Timer, JPP.StorageCtrl, JPP.StringStorageCtrl,
+  JPP.FormIniStorage, JPP.PngCollection,
+  JPP.DoubleLineLabel, JPP.DoubleLabel,
+  JPP.Edit
   ;
 
 
@@ -26,13 +28,17 @@ begin
   RegisterComponents(
     JPPackPageName,
     [
-      TJppBasicPanel, TJppPanel,
+      TJppBasicPanel, TJppPanel, TJppSimplePanel,
       TJppBasicSpeedButton, TJppBasicPngButton, TJppPngButton,
-      TJppColorComboBox, TJppColorListBox,
+      TJppColorComboBox, TJppColorListBox, TJppColorSwatch, TJppColorSwatchEx,
       TJppLinkLabel,
       TJppTimer,
-      TJppStorageCtrl,
-      TJppFormIniStorage
+      TJppStorageCtrl, 
+      TJppStringStorageCtrl,
+      TJppFormIniStorage,
+      TJppPngCollection,
+      TJppDoubleLineLabel, TJppDoubleLabel,
+      TJppEdit
     ]
   );
 end;
