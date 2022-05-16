@@ -1,21 +1,25 @@
 unit JPP.ColorSwatch;
 
+{
+  Jacek Pazera
+  http://www.pazera-software.com
+  https://github.com/jackdp
+}
+
+{$I jpp.inc}
 {$IFDEF FPC} {$mode delphi} {$ENDIF}
-//{$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+
 
 interface
 
 uses
   {$IFDEF MSWINDOWS}Windows,{$ENDIF}
-  {$IFDEF DCC}
-  Winapi.Messages,
-  System.SysUtils, System.Classes, System.Types, System.UITypes,
-  Vcl.Controls, Vcl.Forms, Vcl.Graphics, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Dialogs, Vcl.Clipbrd,
-  {$ELSE}
-  SysUtils, Classes, Types, Controls, StdCtrls, Graphics, Dialogs, Buttons, Clipbrd, ExtCtrls, LCLType, LCLIntf, Messages, LMessages,
-  {$ENDIF}
-  JPL.Strings, JPL.Conversion, JPL.Colors,
-  JPP.Types, JPP.Graphics, JPP.Common, JPP.Common.Procs, JPP.ColorControls.Common, JPP.BasicSpeedButton;
+  Messages,
+  SysUtils, Classes, Types, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}{$ENDIF}
+  Controls, Forms, Graphics, StdCtrls, ExtCtrls, Dialogs, Clipbrd,
+  {$IFDEF FPC}LCLType, LCLIntf, LMessages,{$ENDIF}
+  JPL.Strings, JPL.Conversion, JPL.Colors, JPL.Rects,
+  JPP.Types, JPP.Graphics, JPP.Common, JPP.Common.Procs, JPP.AnchoredControls, JPP.ColorControls.Common, JPP.BasicSpeedButton;
 
 
 type
@@ -183,12 +187,16 @@ type
     FOnGetTopColorStrValue: TOnGetColorStrValue;
     FOnGetBottomColorStrValue: TOnGetColorStrValue;
     FOnSelectedColorChange: TOnSelectedColorChange;
+    FOnSelectedColorChanged: TNotifyEvent;
+    FAnchoredControls: TJppAnchoredControls;
     procedure SetAppearance(const Value: TJppColorSwatchAppearance);
     procedure SetTagExt(const Value: TJppTagExt);
     procedure SetSelectedColor(const Value: TColor);
     procedure SetOnGetTopColorStrValue(const Value: TOnGetColorStrValue);
     procedure SetOnGetBottomColorStrValue(const Value: TOnGetColorStrValue);
     procedure SetOnSelectedColorChange(const Value: TOnSelectedColorChange);
+    procedure SetOnSelectedColorChanged(const Value: TNotifyEvent);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
     procedure DrawBackground(ARect: TRect); override;
     procedure DrawColorValue(ColorValue: TJppColorSwatchColorValue; ARect: TRect);
@@ -199,18 +207,25 @@ type
     procedure Paint; override;
     procedure AdjustClientRect(var Rect: TRect); override;
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
-    property SelectedColor: TColor read FSelectedColor write SetSelectedColor default clSilver;
+
     function TopColorStr: string;
     function BottomColorStr: string;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
+
     property Canvas;
     property DockManager;
 
+    property SelectedColor: TColor read FSelectedColor write SetSelectedColor default clSilver;
     property OnGetTopColorStrValue: TOnGetColorStrValue read FOnGetTopColorStrValue write SetOnGetTopColorStrValue;
     property OnGetBottomColorStrValue: TOnGetColorStrValue read FOnGetBottomColorStrValue write SetOnGetBottomColorStrValue;
     property OnSelectedColorChange: TOnSelectedColorChange read FOnSelectedColorChange write SetOnSelectedColorChange;
+    property OnSelectedColorChanged: TNotifyEvent read FOnSelectedColorChanged write SetOnSelectedColorChanged;
+
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
   published
   end;
   {$endregion}
@@ -276,9 +291,12 @@ type
     property Appearance;
     property TagExt;
     {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
-    {$IFDEF DCC} property Touch; {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE} property Touch; {$ENDIF}
     property DoubleBuffered;
+    {$IFDEF DCC}property ParentDoubleBuffered;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_WINCONTROL_WITH_PARENTDOUBLEBUFFERED}
     property ParentDoubleBuffered;
+    {$ENDIF}{$ENDIF}
     {$IFDEF FPC}
     property BorderSpacing;
     property ChildSizing;
@@ -288,6 +306,9 @@ type
     property OnGetTopColorStrValue;
     property OnGetBottomColorStrValue;
     property OnSelectedColorChange;
+    property OnSelectedColorChanged;
+
+    property AnchoredControls;
   end;
   {$endregion}
 
@@ -435,9 +456,12 @@ type
     property Appearance;
     property TagExt;
     {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
-    {$IFDEF DCC} property Touch; {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE} property Touch; {$ENDIF}
     property DoubleBuffered;
+    {$IFDEF DCC}property ParentDoubleBuffered;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_WINCONTROL_WITH_PARENTDOUBLEBUFFERED}
     property ParentDoubleBuffered;
+    {$ENDIF}{$ENDIF}
     {$IFDEF FPC}
     property BorderSpacing;
     property ChildSizing;
@@ -447,6 +471,7 @@ type
     property OnGetTopColorStrValue;
     property OnGetBottomColorStrValue;
     property OnSelectedColorChange;
+    property OnSelectedColorChanged;
     // Ex
     property BoundLabel;
     property BoundLabelPosition;
@@ -458,6 +483,7 @@ type
     property ButtonPasteColor;
     property ButtonsAlignment;
     {$IFDEF DCC}property ColorDialogOptions;{$ENDIF}
+    property AnchoredControls;
 
   end;
   {$endregion}
@@ -577,19 +603,28 @@ end;
 constructor TJppCustomColorSwatch.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  {$IFDEF DCC}ParentBackground := False;{$ENDIF}
+  {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}
   ParentBackground := False;
+  {$ENDIF}{$ENDIF}
 
   FTagExt := TJppTagExt.Create(Self);
   FAppearance := TJppColorSwatchAppearance.Create(Self);
   FAppearance.OnChange := PropsChanged;
 
   FSelectedColor := clSilver;
+
+  FOnSelectedColorChange := nil;
+  FOnSelectedColorChanged := nil;
+
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 end;
 
 destructor TJppCustomColorSwatch.Destroy;
 begin
   FTagExt.Free;
   FAppearance.Free;
+  FAnchoredControls.Free;
   inherited Destroy;
 end;
 
@@ -597,6 +632,32 @@ procedure TJppCustomColorSwatch.PropsChanged(Sender: TObject);
 begin
   if csLoading in ComponentState then Exit;
   Invalidate;
+end;
+
+procedure TJppCustomColorSwatch.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppCustomColorSwatch.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
+procedure TJppCustomColorSwatch.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
 end;
 
 procedure TJppCustomColorSwatch.SetAppearance(const Value: TJppColorSwatchAppearance);
@@ -620,6 +681,11 @@ begin
   FOnSelectedColorChange := Value;
 end;
 
+procedure TJppCustomColorSwatch.SetOnSelectedColorChanged(const Value: TNotifyEvent);
+begin
+  FOnSelectedColorChanged := Value;
+end;
+
 procedure TJppCustomColorSwatch.SetSelectedColor(const Value: TColor);
 var
   NewColor: TColor;
@@ -631,6 +697,7 @@ begin
   FSelectedColor := NewColor;
 
   PropsChanged(Self);
+  if Assigned(FOnSelectedColorChanged) then FOnSelectedColorChanged(Self);
 end;
 
 procedure TJppCustomColorSwatch.SetTagExt(const Value: TJppTagExt);
@@ -711,7 +778,10 @@ begin
   if Appearance.DrawTopBorder then DrawTopBorder(Canvas, ARect, Canvas.Pen, False);
   if Appearance.DrawBottomBorder then DrawBottomBorder(Canvas, ARect, Canvas.Pen, False);
 end;
+  {$endregion DrawBorders}
 
+
+  {$Region ' ---------------- TJppCustomColorSwatch.DrawColorRect ---------------- '}
 procedure TJppCustomColorSwatch.DrawColorRect;
 var
   R: TRect;
@@ -719,7 +789,7 @@ begin
   R := ClientRect;
   if FAppearance.TopColorValue.Visible or FAppearance.BottomColorValue.Visible then R.Width := FAppearance.ColorRect.Width;
 
-  InflateRectEx(R, FAppearance.ColorRect.Margins);
+  InflateRectWithMargins(R, FAppearance.ColorRect.Margins);
 
   with Canvas do
   begin
@@ -737,7 +807,10 @@ begin
     Rectangle(R);
   end;
 end;
+  {$endregion TJppCustomColorSwatch.DrawColorRect}
 
+
+  {$Region ' ----------------- TJppCustomColorSwatch.DrawColorValue ------------------ '}
 procedure TJppCustomColorSwatch.DrawColorValue(ColorValue: TJppColorSwatchColorValue; ARect: TRect);
 var
   sColor, sPrefix, sSuffix, sText: string;
@@ -762,13 +835,17 @@ begin
     Pen.Color := Brush.Color;
     Rectangle(ARect);
 
+    Brush.Style := bsClear;
     Font.Assign(ColorValue.Font);
     DrawCenteredText(Canvas, ARect, sText, 0, ColorValue.TextPosYDelta);
   end;
 
 end;
 
-{$endregion DrawBorders}
+
+
+{$endregion TJppCustomColorSwatch.DrawColorValue}
+
 
 
 {$endregion TJppCustomColorSwatch}
@@ -1296,7 +1373,7 @@ var
 begin
   s := Clipboard.AsText;
   if TryDelphiIntStrToColor(s, cl) then SelectedColor := cl
-  else if JPL.Colors.TryGetColor(Clipboard.AsText, cl) then SelectedColor := cl;
+  else if JPL.Colors.TryGetColor(s, cl) then SelectedColor := cl;
 //  if TryStrToInt(Clipboard.AsText, x) then
 //  begin
 //    SelectedColor := TColor(x);

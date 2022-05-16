@@ -4,21 +4,20 @@ unit JPP.PngCollection;
   Jacek Pazera
   http://www.pazera-software.com
   https://github.com/jackdp
-  Last mod: 2019.05.25
 }
 
+
+{$I jpp.inc}
 {$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+
 
 interface
 
 uses
-  {$IFDEF DCC}
-  Winapi.Messages, Winapi.Windows,
-  System.SysUtils, System.Classes, System.Types, System.UITypes,
-  Vcl.Graphics, Vcl.Imaging.PngImage,
-  {$ELSE}
-  SysUtils, Classes, Graphics,
-  {$ENDIF}
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  Messages,
+  SysUtils, Classes, Types, {$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}
+  Graphics, {$IFDEF DCC}{$IFDEF HAS_UNIT_SCOPE}Vcl.Imaging.PngImage,{$ELSE}pngimage,{$ENDIF}{$ENDIF} ExtCtrls,
   JPP.Common, JPL.Strings, JPL.Conversion, JPL.Colors;
 
 
@@ -36,8 +35,15 @@ type
   private
     FItems: TJppPngCollectionItems;
     FTagExt: TJppTagExt;
+    FImage: TImage;
+    FImageIndex: integer;
     procedure EnableOrDisableAll(const Enable: Boolean);
     procedure SetTagExt(const Value: TJppTagExt);
+    procedure SetImage(const Value: TImage);
+    procedure ClearImage;
+    procedure SetImageIndex(const Value: integer);
+  protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -52,9 +58,13 @@ type
     function GetPngImage(const Index: integer): TPngImage;
     function GetPngImageByName(const PngName: string; IgnoreCase: Boolean = True): TPngImage; // Returns the first PngImage with the given name
     function ReportStr: string; // for debug
+    procedure SetImagePicture(const ImageIndex: integer);
   published
     property Items: TJppPngCollectionItems read FItems write FItems;
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
+    property Image: TImage read FImage write SetImage;
+    property ImageIndex: integer read FImageIndex write SetImageIndex default -1;
+
   end;
   {$endregion TJppPngCollection}
 
@@ -120,6 +130,8 @@ begin
   inherited Create(AOwner);
   FItems := TJppPngCollectionItems.Create(Self);
   FTagExt := TJppTagExt.Create(Self);
+  FImage := nil;
+  FImageIndex := -1;
 end;
 
 destructor TJppPngCollection.Destroy;
@@ -213,6 +225,15 @@ begin
   Result := Items.IsValidIndex(Index);
 end;
 
+procedure TJppPngCollection.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+  begin
+    if AComponent = FImage then FImage := nil
+  end;
+end;
+
 function TJppPngCollection.PngIndex(const PngName: string; IgnoreCase: Boolean): integer;
 var
   i: integer;
@@ -271,6 +292,37 @@ begin
   end;
 
   Result := s;
+end;
+
+procedure TJppPngCollection.SetImage(const Value: TImage);
+begin
+  FImage := Value;
+  if Assigned(FImage) then
+  begin
+    FImage.FreeNotification(Self);
+    if FImageIndex >= 0 then SetImagePicture(FImageIndex);
+  end;
+end;
+
+procedure TJppPngCollection.SetImageIndex(const Value: integer);
+begin
+  FImageIndex := Value;
+  SetImagePicture(FImageIndex);
+end;
+
+procedure TJppPngCollection.ClearImage;
+begin
+  if not Assigned(FImage) then Exit;
+  FImage.Picture := nil;
+end;
+
+procedure TJppPngCollection.SetImagePicture(const ImageIndex: integer);
+begin
+  if not Assigned(FImage) then Exit;
+  ClearImage;
+  if ImageIndex < 0 then Exit;
+  if ImageIndex > Items.Count - 1 then Exit;
+  FImage.Picture.Assign(Items[ImageIndex].PngImage);
 end;
 
 procedure TJppPngCollection.SetTagExt(const Value: TJppTagExt);

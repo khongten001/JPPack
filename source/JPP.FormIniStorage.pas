@@ -5,15 +5,16 @@ unit JPP.FormIniStorage;
   DO NOT USE!
 }
 
+{$I jpp.inc}
+
 interface
 
 
 uses
-  Winapi.Windows,
-  System.SysUtils, System.Classes, System.IniFiles, System.AnsiStrings, System.UITypes, System.RTTI,
-  Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Forms, Vcl.Dialogs, Vcl.Graphics,
-
-  JPP.Types, JPP.MemIniFile, JPL.Strings;
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  SysUtils, Classes, IniFiles, AnsiStrings, {$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF} RTTI,
+  Controls, StdCtrls, ExtCtrls, ComCtrls, Forms, Dialogs, Graphics,
+  JPP.Types, JPL.MemIniFile, JPL.Strings;
 
 
 const
@@ -556,7 +557,7 @@ begin
         if FontParams.Name then Ini.WriteString(Section, BaseName + '.Font.Name', Font.Name);
         if FontParams.Color then Ini.WriteColor(Section, BaseName + '.Font.Color', Font.Color);
         if FontParams.Size then Ini.WriteInteger(Section, BaseName + '.Font.Size', Font.Size);
-        if FontParams.Style then Ini.WriteFontStyle(Section, BaseName + '.Font.Style', Font.Style);
+        if FontParams.Style then Ini.WriteFontStyles(Section, BaseName + '.Font.Style', Font.Style);
       end;
 
     finally
@@ -644,7 +645,7 @@ begin
         begin
           MemoSection := Section + '.' + BaseName + '.Lines';
           Ini.EraseSection(MemoSection);
-          Ini.WriteStrings(MemoSection, Lines, Params.Memos.CompressLines);
+          Ini.WriteStrings(MemoSection, Lines, 5000, Params.Memos.CompressLines);
         end;
         ___WriteBasicParams(Control, Ini, Section, BaseName, Params.Memos.BasicParams);
         ___WriteFontParams(Control, Ini, Section, BaseName, Params.Memos.Font);
@@ -772,7 +773,7 @@ begin
         if FontParams.Name then Font.Name := Ini.ReadString(Section, BaseName + '.Font.Name', Font.Name);
         if FontParams.Color then Font.Color := Ini.ReadColor(Section, BaseName + '.Font.Color', Font.Color);
         if FontParams.Size then Font.Size := Ini.ReadInteger(Section, BaseName + '.Font.Size', Font.Size);
-        if FontParams.Style then Font.Style := Ini.ReadFontStyle(Section, BaseName + '.Font.Style', Font.Style);
+        if FontParams.Style then Font.Style := Ini.ReadFontStyles(Section, BaseName + '.Font.Style', Font.Style);
       end;
 
     finally
@@ -998,7 +999,7 @@ begin
   FEncoding := Value;
   case Value of
     teASCII: IniEncoding := TEncoding.ASCII;
-    teANSI: IniEncoding := TEncoding.ANSI;
+    teANSI: IniEncoding := {$IFDEF HAS_ANSI_ENCODING}TEncoding.ANSI;{$ELSE}TEncoding.Default;{$ENDIF}
     teUnicode: IniEncoding := TEncoding.Unicode;
     teUTF8: IniEncoding := TEncoding.UTF8;
   else

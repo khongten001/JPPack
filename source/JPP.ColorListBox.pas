@@ -1,26 +1,24 @@
 ﻿unit JPP.ColorListBox;
 
-{$IFDEF FPC} {$mode delphi} {$ENDIF}
-//{$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
-
 {
-  Last mod: 12.07.2019
-    [+] SetItemColor, SetItemName
+  Jacek Pazera
+  http://www.pazera-software.com
+  https://github.com/jackdp
 }
+
+{$I jpp.inc}
+{$IFDEF FPC} {$mode delphi} {$ENDIF}
+
 
 interface
 
 uses
-  {$IFDEF MSWINDOWS}Windows, Messages,{$ENDIF}
-  {$IFDEF DCC}
-  System.SysUtils, System.Classes, System.Types, System.UITypes,
-  Vcl.GraphUtil, Vcl.Controls, Vcl.ExtCtrls, Vcl.Graphics, Vcl.Dialogs, Vcl.StdCtrls,
-  {$ELSE}
-  SysUtils, Classes, Types, Controls, ExtCtrls, Graphics, StdCtrls, Dialogs, LCLType, LCLIntf,
-  {$ENDIF}
-
-  JPL.Conversion, JPL.Strings, JPL.Colors, JPL.ColorArrays,
-  JPP.Types, JPP.Common, JPP.Common.Procs, JPP.ColorControls.Common, JPP.Graphics, JPP.Gradient;
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  Messages, SysUtils, Classes, Types, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}{$ENDIF}
+  Controls, ExtCtrls, Graphics, Dialogs, StdCtrls,
+  {$IFDEF FPC}LCLType, LCLIntf,{$ENDIF}
+  JPL.Strings, JPL.Colors, JPL.ColorArrays, JPL.Rects,
+  JPP.Common, JPP.Common.Procs, JPP.AnchoredControls, JPP.ColorControls.Common, JPP.Gradient;
 
 type
 
@@ -98,6 +96,8 @@ type
     FOnGetItemGradientColors: TJppColorListBoxGetItemGradientColors;
     FOnGetItemTextColor: TJppColorListBoxGetItemTextColor;
     FOnGetNumericItemTextColor: TJppColorListBoxGetNumericItemTextColor;
+    {$IFDEF MSWINDOWS}FOnScroll: TNotifyEvent;{$ENDIF}
+    FAnchoredControls: TJppAnchoredControls;
     //FOnMeasureItem: TMeasureItemEvent;
     procedure SetTagExt(const Value: TJppTagExt);
     procedure SetNoneColor(const Value: TColor);
@@ -117,6 +117,7 @@ type
     procedure SetOnGetItemGradientColors(const Value: TJppColorListBoxGetItemGradientColors);
     procedure SetOnGetItemTextColor(const Value: TJppColorListBoxGetItemTextColor);
     procedure SetOnGetNumericItemTextColor(const Value: TJppColorListBoxGetNumericItemTextColor);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
     procedure PropsChanged(Sender: TObject);
     procedure CreateWnd; override;
@@ -127,12 +128,12 @@ type
     ///////////////////////////////////////////////////////////////////////////////////////////
     procedure GetColorFromStr(sVal: string; var ColorName: string; var AColor: TColor);
     procedure RecreateItems;
-    procedure Click; override;
-
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
-
+    procedure Click; override;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
 
     procedure AssignParams(
       clb: TJppCustomColorListBox; bBevel: Boolean = True; bBorderStyle: Boolean = True;
@@ -145,6 +146,7 @@ type
     procedure EndUpdate(bCallOnChangeAfterUpdate: Boolean = True; bResetUpdatingState: Boolean = False);
     function UpdatingControl: Boolean;
 
+    procedure SelectAll; override;
     procedure UnselectAll;
     procedure InvertSelection;
     procedure RemoveSelectedItems;
@@ -166,8 +168,9 @@ type
     function ColorExists(const AColor: TColor): Boolean;
 
     procedure AddColorsFromArray(const Arr: array of TColorArrayItem; GroupName: string = ''; bAddSeparator: Boolean = False);
+    procedure AddColorsFromColorListBox(clb: TJppCustomColorListBox; bAtTheEnd: Boolean = True);
 
-    function AddColor(const AColor: TColor; const ColorName: string): Integer;
+    function AddColor(const AColor: TColor; const ColorName: string; CustomBgColor: TColor = clNone; CustomFontColor: TColor = clNone): Integer;
     procedure InsertColor(const Index: Integer; const AColor: TColor; const ColorName: string); overload;
     procedure InsertColor(const Index: integer; const ColorName: string; const AColor: TColor); overload;
 
@@ -176,9 +179,15 @@ type
     function AddSeparatorItem(const ACaption: string): integer;
     procedure InsertSeparatorItem(const Index: integer; const ACaption: string);
 
-    function AsColorArray: TJppColorArray; // {$IFDEF FPC}specialize{$ENDIF} TArray<TColorArrayItem>;
+    function AsColorArray: TJppColorArray;
     procedure UpdateColorObject(const Index: Integer; bForce: Boolean = False);
     procedure UpdateAllColorObjects;
+
+    procedure ScrollToLast;
+    procedure ScrollToFirst;
+
+    {$IFDEF MSWINDOWS}procedure Scroll(var Msg: TMessage); message WM_VSCROLL;{$ENDIF}
+
 
     property SelectedColor: TColor read GetSelectedColor write SetSelectedColor;
 
@@ -205,6 +214,10 @@ type
     property OnGetItemGradientColors: TJppColorListBoxGetItemGradientColors read FOnGetItemGradientColors write SetOnGetItemGradientColors;
     property OnGetItemTextColor: TJppColorListBoxGetItemTextColor read FOnGetItemTextColor write SetOnGetItemTextColor;
     property OnGetNumericItemTextColor: TJppColorListBoxGetNumericItemTextColor read FOnGetNumericItemTextColor write SetOnGetNumericItemTextColor;
+
+    {$IFDEF MSWINDOWS}property OnScroll: TNotifyEvent read FOnScroll write FOnScroll;{$ENDIF}
+
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
   end;
   {$ENDREGION TJppCustomColorListBox}
 
@@ -219,6 +232,7 @@ type
     //property Style;
 
     property Anchors;
+    property AnchoredControls;
     {$IFDEF DCC}
     property BevelEdges;
     property BevelInner;
@@ -236,14 +250,17 @@ type
     property ParentBiDiMode;
     property ParentColor;
     {$IFDEF DCC}property ParentCtl3D;{$ENDIF}
+    {$IFDEF DCC}property ParentDoubleBuffered;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_WINCONTROL_WITH_PARENTDOUBLEBUFFERED}
     property ParentDoubleBuffered;
+    {$ENDIF}{$ENDIF}
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
     property ShowHint;
     property TabOrder;
     property TabStop;
-    {$IFDEF DCC}property Touch;{$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE}property Touch;{$ENDIF}
     property Visible;
     {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
     property OnClick;
@@ -255,7 +272,7 @@ type
     property OnEndDrag;
     property OnEnter;
     property OnExit;
-    {$IFDEF DCC}property OnGesture;{$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE}property OnGesture;{$ENDIF}
     property OnKeyDown;
     property OnKeyPress;
     property OnKeyUp;
@@ -294,6 +311,10 @@ type
     {$IFDEF FPC}
     property BorderSpacing;
     {$ENDIF}
+    {$IFDEF MSWINDOWS}property OnScroll;{$ENDIF}
+    property OnMouseWheel;
+    property OnMouseWheelUp;
+    property OnMouseWheelDown;
   end;
   {$ENDREGION TJppColorListBox}
 
@@ -345,9 +366,12 @@ begin
   FOnGetItemGradientColors := nil;
   FOnGetItemTextColor := nil;
   FOnGetNumericItemTextColor := nil;
+  {$IFDEF MSWINDOWS}FOnScroll := nil;{$ENDIF}
 
   FAppearance := TJppColorListBoxAppearance.Create(Self);
   FAppearance.OnChange := (*{$IFDEF FPC} @ {$ENDIF}*)PropsChanged;
+
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 
   FTagExt := TJppTagExt.Create(Self);
 
@@ -355,11 +379,6 @@ begin
   {$IFDEF DCC}FColorDialogOptions := [cdFullOpen, cdAnyColor];{$ENDIF}
 
   FColorListSet := [cltBasic];
-  {
-  [
-    cltStandard16, cltWebGrayBlack, cltWebWhite, cltWebPink, cltWebRed, cltWebOrange, cltWebYellow, cltWebBrown, cltWebGreen,
-    cltWebCyan, cltWebBlue, cltWebPurpleVioletMagenta];
-  }
 
   if csDesigning in ComponentState then RecreateItems;
 end;
@@ -368,6 +387,7 @@ destructor TJppCustomColorListBox.Destroy;
 begin
   FAppearance.Free;
   FTagExt.Free;
+  FAnchoredControls.Free;
   inherited;
 end;
 
@@ -423,6 +443,7 @@ end;
 procedure TJppCustomColorListBox.BeginUpdate;
 begin
   Inc(FUpdateCounter);
+  Items.BeginUpdate;
 end;
 
 procedure TJppCustomColorListBox.EndUpdate(bCallOnChangeAfterUpdate, bResetUpdatingState: Boolean);
@@ -435,6 +456,7 @@ begin
   end;
 
   if (FUpdateCounter = 0) and bCallOnChangeAfterUpdate then PropsChanged(Self);
+  Items.EndUpdate;
 end;
 
 function TJppCustomColorListBox.UpdatingControl: Boolean;
@@ -442,6 +464,31 @@ begin
   Result := FUpdateCounter > 0;
 end;
 
+procedure TJppCustomColorListBox.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppCustomColorListBox.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
+procedure TJppCustomColorListBox.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
+end;
 
 function TJppCustomColorListBox.SetItemColor(const Index: integer; const cl: TColor): Boolean;
 var
@@ -484,11 +531,19 @@ begin
   Items.Insert(Index, '@=' + ItemCaption);
 end;
 
-function TJppCustomColorListBox.AddColor(const AColor: TColor; const ColorName: string): Integer;
+function TJppCustomColorListBox.AddColor(const AColor: TColor; const ColorName: string; CustomBgColor: TColor = clNone; CustomFontColor: TColor = clNone): Integer;
 var
   x: Integer;
+  sColor: string;
 begin
-  x := Items.Add(ColorName + '=' + ColorToRgbIntStr(ColorToRGB(AColor), 3, '0', ','));
+  sColor := ColorToRgbIntStr(ColorToRGB(AColor), 3, '0', ',');
+  if (CustomBgColor <> clNone) or (CustomFontColor <> clNone) then
+  begin
+    sColor := sColor + '@';
+    if CustomBgColor <> clNone then sColor := sColor + '@BgColor=' + ColorToRgbIntStr(CustomBgColor);
+    if CustomFontColor <> clNone then sColor := sColor + '@FontColor=' + ColorToRgbIntStr(CustomFontColor);
+  end;
+  x := Items.Add(ColorName + '=' + sColor);
   //Items.InsertObject(x, ColorName, TObject(Color));
   Items.Objects[x] := TObject(AColor);
   Result := x;
@@ -542,7 +597,35 @@ begin
   end;
 end;
 
-  {$endregion Add & Insert}
+procedure TJppCustomColorListBox.AddColorsFromColorListBox(clb: TJppCustomColorListBox; bAtTheEnd: Boolean = True);
+var
+  i: integer;
+begin
+  BeginUpdate;
+  Items.BeginUpdate;
+  try
+
+    if bAtTheEnd then
+      for i := 0 to clb.Items.Count - 1 do
+      begin
+        Items.Add(clb.Items[i]);
+      end
+    else
+      for i := clb.Items.Count - 1 downto 0 do
+      begin
+        Items.Insert(0, clb.Items[i]);
+      end;
+
+
+    UpdateAllColorObjects;
+
+  finally
+    Items.EndUpdate;
+    EndUpdate;
+  end;
+end;
+
+{$endregion Add & Insert}
 
 
   {$Region ' ------------------- Get & Set Selected --------------------- '}
@@ -668,6 +751,8 @@ begin
   AColor := FNoneColor;
 
   s := Trim(sVal);
+  xp := Pos('@@', s);
+  if xp > 0 then s := Copy(s, 1, xp - 1);
 
   xp := Pos('=', s);
   if xp <= 0 then Exit;
@@ -710,7 +795,6 @@ begin
     end;
   end;
 end;
-
 
 
 function TJppCustomColorListBox.ColorExists(const AColor: TColor): Boolean;
@@ -781,8 +865,6 @@ begin
   end;
 end;
 
-
-
 function TJppCustomColorListBox.IsChangeColorItem(const Index: integer): Boolean;
 begin
   Result := GetItemType(Index) = clbitChangeColor;
@@ -804,6 +886,26 @@ begin
   Invalidate;
 end;
 
+{$IFDEF MSWINDOWS}
+procedure TJppCustomColorListBox.Scroll(var Msg: TMessage);
+begin
+  inherited;
+  if Assigned(FOnScroll) then FOnScroll(Self);
+end;
+{$ENDIF}
+
+procedure TJppCustomColorListBox.ScrollToFirst;
+begin
+  if Items.Count = 0 then Exit;
+  TopIndex := 0;
+end;
+
+procedure TJppCustomColorListBox.ScrollToLast;
+begin
+  if Items.Count = 0 then Exit;
+  TopIndex := Items.Count - 1;
+end;
+
 procedure TJppCustomColorListBox.SetAppearance(const Value: TJppColorListBoxAppearance);
 begin
   FAppearance := Value;
@@ -823,8 +925,6 @@ begin
   if not (csLoading in ComponentState) then RecreateItems;
   PropsChanged(Self);
 end;
-
-
 
 procedure TJppCustomColorListBox.SetNoneColor(const Value: TColor);
 begin
@@ -953,6 +1053,20 @@ begin
   end;
 end;
 
+procedure TJppCustomColorListBox.SelectAll;
+var
+  i: integer;
+begin
+  if not MultiSelect then Exit;
+
+  BeginUpdate;
+  try
+    for i := 0 to Items.Count - 1 do Selected[i] := True;
+  finally
+    EndUpdate;
+  end;
+end;
+
 procedure TJppCustomColorListBox.UnselectAll;
 var
   i: integer;
@@ -1015,7 +1129,7 @@ begin
   end;
 end;
 
-function TJppCustomColorListBox.AsColorArray: TJppColorArray; // {$IFDEF FPC}specialize{$ENDIF} TArray<TColorArrayItem>;
+function TJppCustomColorListBox.AsColorArray: TJppColorArray;
 var
   i: Integer;
   AColor: TColor;
@@ -1038,6 +1152,37 @@ end;
 
 {$REGION '                                        DrawItem                                              '}
 
+procedure SplitStrToColors(s: string; out clFont, clBg, clBgTo: TColor);
+var
+  {$IFDEF DELPHI2009_OR_BELOW}
+  Arr: TStringDynArray;
+  {$ELSE}
+  Arr: TArray<string>;
+  {$ENDIF}
+  i, xp: integer;
+  sInd, sValue: string;
+  cl: TColor;
+begin
+  SplitStrToArray(s, Arr, '@');
+  clFont := clNone;
+  clBg := clNone;
+  clBgTo := clNone;
+  for i := 0 to High(Arr) do
+  begin
+    sInd := UpperCase(Arr[i]);
+    xp := Pos('=', sInd);
+    if xp = 0 then Continue;
+    sValue := Copy(sInd, xp + 1, Length(sInd));
+    sInd := Copy(sInd, 1, xp - 1);
+    if not TryGetColor(sValue, cl) then Continue;
+    if sInd = 'FONTCOLOR' then clFont := cl
+    else if sInd = 'BGCOLOR' then clBg := cl
+    else if sInd = 'BGCOLORTO' then clBgTo := cl;
+    //else if sInd = 'BORDERCOLOR' then
+  end;
+end;
+
+
 procedure TJppCustomColorListBox.DrawItem(Index: Integer; ARect: TRect; State: TOwnerDrawState);
 {
   TOwnerDrawState = set of (odSelected, odGrayed, odDisabled, odChecked,
@@ -1047,9 +1192,9 @@ procedure TJppCustomColorListBox.DrawItem(Index: Integer; ARect: TRect; State: T
 
 var
   //s,
-  sName: string;
+  sName, ItemStr, s2: string;
   sOut, sRgbInt, sRgbHex, sBgrHex, sUserColorStr: string;
-  y, xTextStart, xTextLeft, xTextWidth: Integer;
+  y, xTextStart, xTextLeft, xTextWidth, xp: Integer;
   ColorRect, OutTextRect: TRect;
   clBgFrom, clBgTo, clBackground, clText, clRectangle, clBorder: TColor;
   bPrevItemIsSeparator, bSeparatorItem, bChangeColorItem, bCanDrawDataSep: Boolean;
@@ -1058,6 +1203,8 @@ var
   grd: TJppGradientEx;
   Borders: TJppBorders;
   ItemData: TJppColorListBoxItemData;
+  bCustomFontColor, bCustomBgColor, bCustomGradient: Boolean;
+  CustomFontColor, CustomBgColor, CustomBgColorTo: TColor;
 
 begin
 
@@ -1077,12 +1224,32 @@ begin
     Exit;
   end;
 
+  bCustomFontColor := False;
+  bCustomBgColor := False;
+  bCustomGradient := False;
 
   //s := ItemData.Name;
   bSeparatorItem := ItemData.ItemType = clbitSeparator;
   bChangeColorItem := ItemData.ItemType = clbitChangeColor;
   bSelected := odSelected in State;
   sName := ItemData.Name;
+
+
+  ItemStr := Items[Index];
+  xp := Pos('@@', ItemStr);
+  if xp > 0 then
+  begin
+    s2 := Copy(ItemStr, xp + 2, Length(ItemStr));
+    ItemStr := Copy(ItemStr, 1, xp - 1);
+    SplitStrToColors(s2, CustomFontColor, CustomBgColor, CustomBgColorTo);
+    bCustomFontColor := CustomFontColor <> clNone;
+    bCustomBgColor := CustomBgColor <> clNone;
+    if bCustomBgColor then bCustomGradient := CustomBgColorTo <> clNone;
+  end;
+
+  xp := Pos('@@', sName);
+  if xp > 0 then sName := Copy(sName, 1, xp - 1);
+
 
   bPrevItemIsSeparator := False;
   if Index > 0 then bPrevItemIsSeparator := Self.IsSeparatorItem(Index - 1);
@@ -1107,17 +1274,25 @@ begin
       Pen.Style := psClear;
 
       // --------- Background color / gradient -------------
-      if FAppearance.SeparatorItem.Background.DrawGradient then
+      if FAppearance.SeparatorItem.Background.DrawGradient or bCustomGradient then
       begin
         grd := FAppearance.SeparatorItem.Background.Gradient;
-        clBgFrom := grd.ColorFrom;
-        clBgTo := grd.ColorTo;
+        if bCustomGradient then
+        begin
+          clBgFrom := CustomBgColor;
+          clBgTo := CustomBgColorTo;
+        end
+        else
+        begin
+          clBgFrom := grd.ColorFrom;
+          clBgTo := grd.ColorTo;
+        end;
         if Assigned(FOnGetItemGradientColors) then FOnGetItemGradientColors(Index, State, ItemData, clBgFrom, clBgTo);
         cyGradientFill(Self.Canvas, ARect, clBgFrom, clBgTo, grd.Orientation, grd.Balance, grd.AngleDegree, grd.BalanceMode, grd.MaxDegrade, grd.SpeedPercent);
       end
       else
       begin
-        clBackground := FAppearance.SeparatorItem.Background.Color;
+        if bCustomBgColor then clBackground := CustomBgColor else clBackground := FAppearance.SeparatorItem.Background.Color;
         if Assigned(FOnGetItemBackgroundColor) then FOnGetItemBackgroundColor(Index, State, ItemData, clBackground);
         Brush.Color := clBackground;
         Rectangle(ARect);
@@ -1139,9 +1314,9 @@ begin
       if sName <> '' then
       begin
         Font.Assign(FAppearance.SeparatorItem.Font);
-        clText := Font.Color;
+        if bCustomFontColor then clText := CustomFontColor else clText := Font.Color;
         if not Enabled then clText := FAppearance.SeparatorItem.DisabledFontColor;
-        y := GetMiddlePosY(ARect, TextHeight(sName)) + FAppearance.SeparatorItem.TextPosDeltaY;
+        y := GetTextMiddlePosY(ARect, TextHeight(sName)) + FAppearance.SeparatorItem.TextPosDeltaY;
         if Assigned(FOnGetItemTextColor) then FOnGetItemTextColor(Index, State, ItemData, clText);
         Font.Color := clText;
 
@@ -1251,7 +1426,7 @@ begin
         if Assigned(FOnGetItemTextColor) then FOnGetItemTextColor(Index, State, ItemData, clText);
         Font.Color := clText;
 
-        y := GetMiddlePosY(ARect, TextHeight(sName)) + FAppearance.ChangeColorItem.TextPosDeltaY;
+        y := GetTextMiddlePosY(ARect, TextHeight(sName)) + FAppearance.ChangeColorItem.TextPosDeltaY;
 
         xTextWidth := TextWidth(sName);
 
@@ -1270,6 +1445,7 @@ begin
     end;
     {$endregion DRAW: ChangeColor Item}
 
+
     Font.Assign(Self.Font);
     Brush.Color := Self.Color;
     Brush.Style := bsSolid;
@@ -1281,7 +1457,7 @@ begin
       Pen.Style := psClear;
 
       // --------- Background color / gradient -------------
-      if FAppearance.SelectedItem.Background.DrawGradient then
+      if FAppearance.SelectedItem.Background.DrawGradient or bCustomGradient then
       begin
         grd := FAppearance.SelectedItem.Background.Gradient;
         clBgFrom := grd.ColorFrom;
@@ -1313,6 +1489,7 @@ begin
 
     begin
       if not Enabled then Brush.Color := FAppearance.DisabledBackgroundColor;
+      if Enabled and bCustomBgColor then Brush.Color := CustomBgColor;
       clBackground := Brush.Color;
       if Assigned(FOnGetItemBackgroundColor) then FOnGetItemBackgroundColor(Index, State, ItemData, clBackground);
       Brush.Color := clBackground;
@@ -1403,7 +1580,7 @@ begin
 
       xTextLeft := xTextStart;
       Font.Assign(FAppearance.NumericFont);
-      clText := Font.Color;
+      if bCustomFontColor then clText := CustomFontColor else clText := Font.Color;
       if bSelected then clText := FAppearance.NumericFontSelectedColor;
       if not Enabled then clText := FAppearance.DisabledFontColor;
       if bSelected and (not Enabled) then clText := FAppearance.SelectedItem.DisabledFontColor;
@@ -1414,7 +1591,7 @@ begin
       if sUserColorStr <> '' then
       begin
         sOut := sUserColorStr;
-        y := GetMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
+        y := GetTextMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
         TextOut(xTextLeft, y, sOut);
         xTextLeft := xTextLeft + TextWidth(sOut);
         bCanDrawDataSep := FAppearance.ShowRgbInt or FAppearance.ShowRgbHex or FAppearance.ShowBgrHex or (FAppearance.ShowColorName and (sName <> ''));
@@ -1429,7 +1606,7 @@ begin
       if FAppearance.ShowRgbInt then
       begin
         sOut := {%H-}sRgbInt;
-        y := GetMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
+        y := GetTextMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
         TextOut(xTextLeft, y, sOut);
         xTextLeft := xTextLeft + TextWidth(sOut);
         bCanDrawDataSep := FAppearance.ShowRgbHex or FAppearance.ShowBgrHex or (FAppearance.ShowColorName and (sName <> ''));
@@ -1444,7 +1621,7 @@ begin
       if FAppearance.ShowRgbHex then
       begin
         sOut := {%H-}sRgbHex;
-        y := GetMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
+        y := GetTextMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
         TextOut(xTextLeft, y, sOut);
         xTextLeft := xTextLeft + TextWidth(sOut);
         bCanDrawDataSep := FAppearance.ShowBgrHex or (FAppearance.ShowColorName and (sName <> ''));
@@ -1459,7 +1636,7 @@ begin
       if FAppearance.ShowBgrHex then
       begin
         sOut := {%H-}sBgrHex;
-        y := GetMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
+        y := GetTextMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.NumericTextPosDeltaY;
         TextOut(xTextLeft, y, sOut);
         xTextLeft := xTextLeft + TextWidth(sOut);
         bCanDrawDataSep := FAppearance.ShowColorName and (sName <> '');
@@ -1471,7 +1648,7 @@ begin
       end;
 
       Font.Assign(Self.Font);
-      clText := Font.Color;
+      if bCustomFontColor then clText := CustomFontColor else clText := Font.Color;
       if bSelected then clText := FAppearance.SelectedItem.FontColor;
       if not Enabled then clText := FAppearance.DisabledFontColor;
       if bSelected and (not Enabled) then clText := FAppearance.SelectedItem.DisabledFontColor;
@@ -1482,7 +1659,7 @@ begin
       if FAppearance.ShowColorName then
       begin
         sOut := sName;
-        y := GetMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.TextPosDeltaY;
+        y := GetTextMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.TextPosDeltaY;
         TextOut(xTextLeft, y, sOut);
       end;
 
@@ -1498,9 +1675,9 @@ begin
       if FAppearance.ShowColorName then sOut := sOut + FAppearance.DataSeparator + sName;
       sOut := TrimFromStart(sOut, FAppearance.DataSeparator);
 
-      y := GetMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.TextPosDeltaY;
+      y := GetTextMiddlePosY(OutTextRect, TextHeight(sOut)) + FAppearance.TextPosDeltaY;
 
-      clText := Font.Color;
+      if bCustomFontColor then clText := CustomFontColor else clText := Font.Color;
       if bSelected then clText := FAppearance.SelectedItem.FontColor;
       if not Enabled then clText := FAppearance.DisabledFontColor;
       if bSelected and (not Enabled) then clText := FAppearance.SelectedItem.DisabledFontColor;

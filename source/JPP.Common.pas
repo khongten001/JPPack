@@ -1,31 +1,67 @@
 unit JPP.Common;
 
-{$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+{$I jpp.inc}
+{$IFDEF FPC}
+  {$mode delphi}
+  {$MODESWITCH ADVANCEDRECORDS}
+{$ENDIF}
 
 interface
 
 uses
-  {$IFDEF MSWINDOWS}
-  Windows,
-  {$ENDIF}
-  {$IFDEF DCC}
-  System.SysUtils, System.Classes, System.UITypes,
-  Vcl.Controls, Vcl.StdCtrls, Vcl.Buttons, Vcl.Graphics, Vcl.Dialogs,
-  {$ELSE}
-  SysUtils, Classes, Controls, StdCtrls, Graphics, LCLType, LCLIntf,
-  {$ENDIF}
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  SysUtils, Classes,
+  Controls, StdCtrls, Buttons, Graphics, Dialogs, Types,
+  {$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}
+  {$IFDEF FPC}LCLType, LCLIntf,{$ENDIF}
+  {$IFDEF DELPHI2009}Generics.Collections,{$ENDIF}
   JPL.Colors,
   JPP.Types, JPP.Gradient, JPP.Graphics;
 
+
+{$IFDEF FPC}
 type
-
-
-  {$IFDEF FPC}
   TVerticalAlignment = (taAlignTop, taAlignBottom, taVerticalCenter);
   TEllipsisPosition = (epNone, epPathEllipsis, epEndEllipsis, epWordEllipsis);
-  {$ENDIF}
+
+{.$IFDEF UNIX}
+const
+  DT_PATH_ELLIPSIS = $4000;
+  DT_END_ELLIPSIS = $8000;
+  DT_MODIFYSTRING = $10000;
+  DT_RTLREADING = $20000;
+  DT_WORD_ELLIPSIS = $40000;
+{.$ENDIF}
+
+{$ENDIF} // FPC
+
+
+type
 
   TJppFocusRectType = (frtSystem, frtCustom, frtNone);
+  TJppTextAlignment = (talTopLeft, talTopCenter, talTopRight, talLeft, talCenter, talRight, talBottomLeft, talBottomCenter, talBottomRight);
+
+
+  {$IFDEF DELPHI2009}
+  TList<T> = class(Generics.Collections.TList<T>)
+  public
+    function First: T; inline;
+    function Last: T; inline;
+  end;
+
+  TObjectList<T: class> = class(Generics.Collections.TObjectList<T>)
+  public
+    function Last: T; inline;
+  end;
+  {$ENDIF}
+
+  TJppShadowParamsRec = record
+    Color: TColor;
+    ShiftX: ShortInt;
+    ShiftY: ShortInt;
+    procedure Initialize(const AColor: TColor; const AShiftX, AShiftY: ShortInt);
+    procedure Clear;
+  end;
 
 
   {$region ' ------------ TJppPersistent ------------- '}
@@ -63,6 +99,8 @@ type
     destructor Destroy; override;
     procedure Assign(Margins: TJppMargins); reintroduce;
     procedure SetMargins(const xLeft, xRight, xTop, xBottom: integer);
+    procedure Initialize(const xLeft, xRight, xTop, xBottom: integer);
+    function IsZero: Boolean;
   published
     property Left: integer read FLeft write SetLeft default 0;
     property Right: integer read FRight write SetRight default 0;
@@ -70,6 +108,9 @@ type
     property Bottom: integer read FBottom write SetBottom default 0;
   end;
   {$endregion TJppMargins}
+
+
+  TJppPadding = class(TJppMargins);
 
 
   {$region ' --------- TJppTagExt ------------- '}
@@ -112,7 +153,9 @@ type
   protected
     {$IFDEF DCC}procedure AdjustBounds; override;{$ENDIF}
   public
-    constructor Create(AOwner: TComponent); override;
+    constructor Create(AOwner: TComponent); overload; override;
+    constructor Create(AOwner: TComponent; AName: string); {overload;} reintroduce; overload;  //XE5: TCustomLabel - TGraphicControl - TControl - TComponent.Create (virtual)
+    // http://docwiki.embarcadero.com/RADStudio/Sydney/en/W1010_Method_'%25s'_hides_virtual_method_of_base_type_'%25s'_(Delphi)
   published
     property OnAdjustBounds: TNotifyEvent read FOnAdjustBounds write SetOnAdjustBounds;
 
@@ -133,7 +176,7 @@ type
     property ShowAccelChar;
     property ShowHint;
     property Top: Integer read GetTop;
-    {$IFDEF DCC}property Touch;{$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE}property Touch;{$ENDIF}
     property Transparent;
     property Layout;
     property WordWrap;
@@ -145,7 +188,7 @@ type
     property OnDragOver;
     property OnEndDock;
     property OnEndDrag;
-    {$IFDEF DCC}property OnGesture;{$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE}property OnGesture;{$ENDIF}
     {$IFDEF DCC}property OnMouseActivate;{$ENDIF}
     property OnMouseDown;
     property OnMouseMove;
@@ -346,6 +389,31 @@ type
   {$endregion}
 
 
+  {$Region '   TJppTextShadowParams   '}
+  TJppTextShadowParams = class(TJppPersistent)
+  private
+    FShiftX: ShortInt;
+    FShiftY: ShortInt;
+    FColor: TColor;
+    FEnabled: Boolean;
+    procedure SetShiftX(const Value: ShortInt);
+    procedure SetShiftY(const Value: ShortInt);
+    procedure SetColor(const Value: TColor);
+    procedure SetEnabled(const Value: Boolean);
+  protected
+  public
+    constructor Create(AOwner: TComponent);
+    destructor Destroy; override;
+    procedure Assign(const Source: TJppTextShadowParams); reintroduce;
+    function AsShadowParamsRec: TJppShadowParamsRec;
+  published
+    property ShiftX: ShortInt read FShiftX write SetShiftX default 1;
+    property ShiftY: ShortInt read FShiftY write SetShiftY default 1;
+    property Color: TColor read FColor write SetColor default clSilver;
+    property Enabled: Boolean read FEnabled write SetEnabled default False;
+  end;
+  {$endregion TJppTextShadowParams}
+
 
   
 implementation
@@ -450,8 +518,13 @@ end;
 
 constructor TJppControlBoundLabel.Create(AOwner: TComponent);
 begin
+  Create(AOwner, 'SubLabel');
+end;
+
+constructor TJppControlBoundLabel.Create(AOwner: TComponent; AName: string);
+begin
   inherited Create(AOwner);
-  Name := 'SubLabel';  { do not localize }
+  Name := AName;
   SetSubComponent(True);
   if Assigned(AOwner) then Caption := AOwner.Name;
 end;
@@ -461,8 +534,6 @@ procedure TJppControlBoundLabel.AdjustBounds;
 begin
   inherited AdjustBounds;
   if Assigned(FOnAdjustBounds) then FOnAdjustBounds(Self);
-  //if Owner is TCustomLabeledEdit then with Owner as TCustomLabeledEdit do SetLabelPosition(LabelPosition);
-  //if Owner is TJPColorComboBoxEx then with Owner as TJPColorComboBoxEx do SetBoundLabelPosition(BoundLabelPosition);
 end;
 {$ENDIF}
 
@@ -566,7 +637,7 @@ begin
   FPen := TPen.Create;
   FSpacing := 2;
   FFocusType := frtNone;
-  FPen.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FPen.OnChange := PropsChanged;
 end;
 
 destructor TJppFocusRectParams.Destroy;
@@ -804,10 +875,10 @@ begin
   FOwner := AOwner;
 
   FGradient := TJppGradientEx.Create(AOwner);
-  FGradient.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FGradient.OnChange := PropsChanged;
 
   FBorders := TJppBorders.Create(AOwner);
-  FBorders.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FBorders.OnChange := PropsChanged;
 
   FColor := clBtnFace;
   FDrawGradient := True;
@@ -949,13 +1020,13 @@ begin
   FOwner := AOwner;
 
   FLeft := TJppBorder.Create(AOwner);
-  FLeft.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FLeft.OnChange := PropsChanged;
   FRight := TJppBorder.Create(AOwner);
-  FRight.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FRight.OnChange := PropsChanged;
   FTop := TJppBorder.Create(AOwner);
-  FTop.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FTop.OnChange := PropsChanged;
   FBottom := TJppBorder.Create(AOwner);
-  FBottom.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FBottom.OnChange := PropsChanged;
 end;
 
 destructor TJppBorders.Destroy;
@@ -1013,8 +1084,6 @@ end;
 {$endregion TJppBorders}
 
 
-
-
 {$region ' ------------------------- TJppMargins ---------------------- '}
 
 constructor TJppMargins.Create(AOwner: TComponent);
@@ -1039,19 +1108,29 @@ begin
   FBottom := Margins.Bottom;
 end;
 
-procedure TJppMargins.SetLeft(const Value: integer);
+function TJppMargins.IsZero: Boolean;
 begin
-  if FLeft = Value then Exit;
-  FLeft := Value;
-  PropsChanged(Self);
+  Result := (FLeft = 0) and (FRight = 0) and (FTop = 0) and (FBottom = 0);
 end;
 
-procedure TJppMargins.SetMargins(const xLeft, xRight, xTop, xBottom: integer);
+procedure TJppMargins.Initialize(const xLeft, xRight, xTop, xBottom: integer);
 begin
   FLeft := xLeft;
   FRight := xRight;
   FTop := xTop;
   FBottom := xBottom;
+  PropsChanged(Self);
+end;
+
+procedure TJppMargins.SetMargins(const xLeft, xRight, xTop, xBottom: integer);
+begin
+  Initialize(xLeft, xRight, xTop, xBottom);
+end;
+
+procedure TJppMargins.SetLeft(const Value: integer);
+begin
+  if FLeft = Value then Exit;
+  FLeft := Value;
   PropsChanged(Self);
 end;
 
@@ -1078,4 +1157,112 @@ end;
 
 {$endregion TJppMargins}
 
+
+{$Region '                    TJppTextShadowParams                    '}
+
+constructor TJppTextShadowParams.Create(AOwner: TComponent);
+begin
+  inherited Create;
+  FShiftX := 1;
+  FShiftY := 1;
+  FColor := clSilver;
+  FEnabled := False;
+end;
+
+destructor TJppTextShadowParams.Destroy;
+begin
+  inherited;
+end;
+
+function TJppTextShadowParams.AsShadowParamsRec: TJppShadowParamsRec;
+begin
+  if not FEnabled then Result.Clear
+  else
+  begin
+    Result.Color := FColor;
+    Result.ShiftX := FShiftX;
+    Result.ShiftY := FShiftY;
+  end;
+end;
+
+procedure TJppTextShadowParams.Assign(const Source: TJppTextShadowParams);
+begin
+  FShiftX := Source.ShiftX;
+  FShiftY := Source.ShiftY;
+  FColor := Source.Color;
+  FEnabled := Source.Enabled;
+end;
+
+procedure TJppTextShadowParams.SetColor(const Value: TColor);
+begin
+  if FColor = Value then Exit;
+  FColor := Value;
+  PropsChanged(Self);
+end;
+
+procedure TJppTextShadowParams.SetEnabled(const Value: Boolean);
+begin
+  if FEnabled = Value then Exit;
+  FEnabled := Value;
+  PropsChanged(Self);
+end;
+
+procedure TJppTextShadowParams.SetShiftX(const Value: ShortInt);
+begin
+  if FShiftX = Value then Exit;
+  FShiftX := Value;
+  PropsChanged(Self);
+end;
+
+procedure TJppTextShadowParams.SetShiftY(const Value: ShortInt);
+begin
+  if FShiftY = Value then Exit;
+  FShiftY := Value;
+  PropsChanged(Self);
+end;
+
+{$endregion TJppTextShadowParams}
+
+
+
+{$IFDEF DELPHI2009}
+function TList<T>.First: T;
+begin
+  Result := Items[0];
+end;
+
+function TList<T>.Last: T;
+begin
+  Result := Items[Count - 1];
+end;
+
+
+function TObjectList<T>.Last: T;
+begin
+  Result := Items[Count - 1];
+end;
+{$ENDIF}
+
+
+
+
+
+{ TJppShadowParamsRec }
+
+procedure TJppShadowParamsRec.Clear;
+begin
+  Self.Color := clNone;
+  Self.ShiftX := 0;
+  Self.ShiftY := 0;
+end;
+
+procedure TJppShadowParamsRec.Initialize(const AColor: TColor; const AShiftX, AShiftY: ShortInt);
+begin
+  Self.Color := AColor;
+  Self.ShiftX := AShiftX;
+  Self.ShiftY := AShiftY;
+end;
+
 end.
+
+

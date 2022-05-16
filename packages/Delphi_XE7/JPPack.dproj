@@ -1,14 +1,14 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <ProjectGuid>{D631B517-4A6B-4A13-B8FA-784BFEF21715}</ProjectGuid>
-        <MainSource>JPPack.dpk</MainSource>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Release</Config>
-        <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <FrameworkType>VCL</FrameworkType>
-        <ProjectVersion>16.1</ProjectVersion>
+        <MainSource>JPPack.dpk</MainSource>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <ProjectGuid>{D631B517-4A6B-4A13-B8FA-784BFEF21715}</ProjectGuid>
+        <ProjectVersion>16.1</ProjectVersion>
+        <TargetedPlatforms>3</TargetedPlatforms>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -28,45 +28,63 @@
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win32)'!=''">
+        <Cfg_1_Win32>true</Cfg_1_Win32>
+        <CfgParent>Cfg_1</CfgParent>
+        <Cfg_1>true</Cfg_1>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win64)'!=''">
+        <Cfg_1_Win64>true</Cfg_1_Win64>
+        <CfgParent>Cfg_1</CfgParent>
+        <Cfg_1>true</Cfg_1>
+        <Base>true</Base>
+    </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_2)'!=''">
         <Cfg_2>true</Cfg_2>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;Xml;Data;Datasnap;Web;Soap;Winapi;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_E>false</DCC_E>
         <SanitizedProjectName>JPPack</SanitizedProjectName>
-        <DCC_ImageBase>00400000</DCC_ImageBase>
-        <DCC_S>false</DCC_S>
-        <VerInfo_Locale>1033</VerInfo_Locale>
-        <DllSuffix>XE7</DllSuffix>
-        <GenPackage>true</GenPackage>
-        <DCC_K>false</DCC_K>
-        <GenDll>true</GenDll>
-        <DCC_F>false</DCC_F>
-        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=;CFBundleName=</VerInfo_Keys>
         <DCC_Description>JPPack VCL Components</DCC_Description>
+        <DCC_E>false</DCC_E>
+        <DCC_F>false</DCC_F>
+        <DCC_ImageBase>00400000</DCC_ImageBase>
+        <DCC_K>false</DCC_K>
         <DCC_N>false</DCC_N>
+        <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;Xml;Data;Datasnap;Web;Soap;Winapi;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_S>false</DCC_S>
+        <DllSuffix>XE7</DllSuffix>
+        <GenDll>true</GenDll>
+        <GenPackage>true</GenPackage>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=;CFBundleName=</VerInfo_Keys>
+        <VerInfo_Locale>1033</VerInfo_Locale>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
-        <DCC_UsePackage>rtl;vclimg;vcl;PngComponents;JPLib;$(DCC_UsePackage)</DCC_UsePackage>
         <DCC_Namespace>System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
-        <VerInfo_Locale>1033</VerInfo_Locale>
-        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <DCC_UsePackage>rtl;vclimg;vcl;PngComponents;JPLib;IGDIPlusMod;$(DCC_UsePackage)</DCC_UsePackage>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Locale>1033</VerInfo_Locale>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
-        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <DCC_Namespace>System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_UsePackage>rtl;vclimg;vcl;PngComponents;$(DCC_UsePackage)</DCC_UsePackage>
+        <DCC_UsePackage>rtl;vclimg;vcl;PngComponents;IGDIPlusMod;$(DCC_UsePackage)</DCC_UsePackage>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
-        <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
-        <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
         <DCC_DebugInformation>0</DCC_DebugInformation>
+        <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
+        <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
@@ -89,38 +107,67 @@
         <DCCReference Include="..\DCR\JppColorSwatchEx.dcr"/>
         <DCCReference Include="..\DCR\JppSimplePanel.dcr"/>
         <DCCReference Include="..\DCR\JppEdit.dcr"/>
+        <DCCReference Include="..\DCR\JppEditEx.dcr"/>
+        <DCCReference Include="..\DCR\JppMemo.dcr"/>
+        <DCCReference Include="..\DCR\JppMemoEx.dcr"/>
+        <DCCReference Include="..\DCR\JppPngCollection.dcr"/>
+        <DCCReference Include="..\DCR\JppComboBox.dcr"/>
+        <DCCReference Include="..\DCR\JppFlatComboBox.dcr"/>
+        <DCCReference Include="..\DCR\JppComboBoxEx.dcr"/>
+        <DCCReference Include="..\DCR\JppStdPanel.dcr"/>
+        <DCCReference Include="..\DCR\JppDoubleLabel.dcr"/>
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="vclimg.dcp"/>
         <DCCReference Include="JPLib.dcp"/>
         <DCCReference Include="PngComponents.dcp"/>
-        <DCCReference Include="..\..\source\JPP.Types.pas"/>
-        <DCCReference Include="..\..\source\JPP.Common.pas"/>
-        <DCCReference Include="..\..\source\JPP.Common.Procs.pas"/>
-        <DCCReference Include="..\..\source\JPP.Graphics.pas"/>
-        <DCCReference Include="..\..\source\JPP.Gradient.pas"/>
-        <DCCReference Include="..\..\source\JPP.MemIniFile.pas"/>
-        <DCCReference Include="..\..\source\JPP.ColorControls.Common.pas"/>
-        <DCCReference Include="..\..\source\JPP.Panel.pas"/>
+        <DCCReference Include="IGDIPlusMod.dcp"/>
+        <DCCReference Include="..\..\source\JPP.AnchoredControls.pas"/>
+        <DCCReference Include="..\..\source\JPP.Helpers.pas"/>
         <DCCReference Include="..\..\source\JPP.BasicPanel.pas"/>
         <DCCReference Include="..\..\source\JPP.BasicPngButton.pas"/>
-        <DCCReference Include="..\..\source\JPP.PngButton.ColorMaps.pas"/>
-        <DCCReference Include="..\..\source\JPP.PngButton.pas"/>
+        <DCCReference Include="..\..\source\JPP.BasicPngButtonEx.pas"/>
         <DCCReference Include="..\..\source\JPP.BasicSpeedButton.pas"/>
+        <DCCReference Include="..\..\source\JPP.BrushStyleComboBox.pas"/>
         <DCCReference Include="..\..\source\JPP.ColorComboBox.pas"/>
+        <DCCReference Include="..\..\source\JPP.ColorControls.Common.pas"/>
         <DCCReference Include="..\..\source\JPP.ColorListBox.pas"/>
-        <DCCReference Include="..\..\source\JPP.LinkLabel.pas"/>
-        <DCCReference Include="..\..\source\JPP.Timer.pas"/>
-        <DCCReference Include="..\..\source\JPP.StorageCtrl.pas"/>
-        <DCCReference Include="..\..\source\JPP.FormIniStorage.pas"/>
-        <DCCReference Include="..\..\source\JPP.StringStorageCtrl.pas"/>
-        <DCCReference Include="..\..\source\JPP.PngCollection.pas"/>
+        <DCCReference Include="..\..\source\JPP.ColorSwatch.pas"/>
+        <DCCReference Include="..\..\source\JPP.ComboBox.pas"/>
+        <DCCReference Include="..\..\source\JPP.ComboBoxEx.pas"/>
+        <DCCReference Include="..\..\source\JPP.Common.pas"/>
+        <DCCReference Include="..\..\source\JPP.Common.Procs.pas"/>
         <DCCReference Include="..\..\source\JPP.DoubleLabel.pas"/>
         <DCCReference Include="..\..\source\JPP.DoubleLineLabel.pas"/>
-        <DCCReference Include="..\..\source\JPP.SimplePanel.pas"/>
-        <DCCReference Include="..\..\source\JPP.ColorSwatch.pas"/>
         <DCCReference Include="..\..\source\JPP.Edit.pas"/>
+        <DCCReference Include="..\..\source\JPP.EditEx.pas"/>
+        <DCCReference Include="..\..\source\JPP.CheckBox.pas"/>
+        <DCCReference Include="..\..\source\JPP.RadioButton.pas"/>
+        <DCCReference Include="..\..\source\JPP.DateTimePicker.pas"/>
         <DCCReference Include="..\..\source\JPP.Flash.pas"/>
+        <DCCReference Include="..\..\source\JPP.FormIniStorage.pas"/>
+        <DCCReference Include="..\..\source\JPP.Gradient.pas"/>
+        <DCCReference Include="..\..\source\JPP.Graphics.pas"/>
+        <DCCReference Include="..\..\source\JPP.Labels.pas"/>
+        <DCCReference Include="..\..\source\JPP.LinkLabel.pas"/>
+        <DCCReference Include="..\..\source\JPP.Memo.pas"/>
+        <DCCReference Include="..\..\source\JPP.MemoEx.pas"/>
+        <DCCReference Include="..\..\source\JPP.Panel.pas"/>
+        <DCCReference Include="..\..\source\JPP.PenStyleComboBox.pas"/>
+        <DCCReference Include="..\..\source\JPP.PngButton.pas"/>
+        <DCCReference Include="..\..\source\JPP.PngButton.ColorMaps.pas"/>
+        <DCCReference Include="..\..\source\JPP.PngCollection.pas"/>
+        <DCCReference Include="..\..\source\JPP.SimplePanel.pas"/>
+        <DCCReference Include="..\..\source\JPP.StdPanel.pas"/>
+        <DCCReference Include="..\..\source\JPP.StorageCtrl.pas"/>
+        <DCCReference Include="..\..\source\JPP.StringStorageCtrl.pas"/>
+        <DCCReference Include="..\..\source\JPP.Timer.pas"/>
+        <DCCReference Include="..\..\source\JPP.Types.pas"/>
+        <DCCReference Include="..\..\source\JPP.ProgressBar.pas"/>
+        <DCCReference Include="..\..\source\JPP.HtmlHint.pas"/>
+        <DCCReference Include="..\..\source\JPP.FlipPanel.pas"/>
+        <DCCReference Include="..\..\source\JPP.FlatComboBox.pas"/>
+        <DCCReference Include="..\..\source\JPP.GPHatchStyleComboBox.pas"/>
         <DCCReference Include="..\..\source\LDPngFunctions.pas"/>
         <DCCReference Include="..\..\source\JPP.Register.pas"/>
         <BuildConfiguration Include="Debug">
@@ -155,6 +202,22 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
+                <DeployClass Name="Android_SplashImage470">
+                    <Platform Name="Android">
+                        <RemoteDir>res\drawable-normal</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                </DeployClass>
+                <DeployClass Name="DependencyModule">
+                    <Platform Name="OSX32">
+                        <Operation>1</Operation>
+                        <Extensions>.dylib</Extensions>
+                    </Platform>
+                    <Platform Name="Win32">
+                        <Operation>0</Operation>
+                        <Extensions>.dll;.bpl</Extensions>
+                    </Platform>
+                </DeployClass>
                 <DeployClass Required="true" Name="DependencyPackage">
                     <Platform Name="iOSDevice">
                         <Operation>1</Operation>
@@ -173,24 +236,6 @@
                         <Extensions>.dylib</Extensions>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="DependencyModule">
-                    <Platform Name="OSX32">
-                        <Operation>1</Operation>
-                        <Extensions>.dylib</Extensions>
-                    </Platform>
-                    <Platform Name="Win32">
-                        <Operation>0</Operation>
-                        <Extensions>.dll;.bpl</Extensions>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="iPad_Launch2048">
-                    <Platform Name="iOSDevice">
-                        <Operation>1</Operation>
-                    </Platform>
-                    <Platform Name="iOSSimulator">
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
                 <DeployClass Name="ProjectOSXInfoPList"/>
                 <DeployClass Name="ProjectiOSDeviceDebug">
                     <Platform Name="iOSDevice">
@@ -198,9 +243,9 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="Android_SplashImage470">
+                <DeployClass Name="AndroidLibnativeMipsFile">
                     <Platform Name="Android">
-                        <RemoteDir>res\drawable-normal</RemoteDir>
+                        <RemoteDir>library\lib\mips</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -210,6 +255,13 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
+                <DeployClass Name="AndroidGDBServer">
+                    <Platform Name="Android">
+                        <RemoteDir>library\lib\armeabi-v7a</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                </DeployClass>
+                <DeployClass Name="ProjectOSXEntitlements"/>
                 <DeployClass Name="ProjectiOSResource">
                     <Platform Name="iOSDevice">
                         <Operation>1</Operation>
@@ -218,14 +270,7 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="ProjectOSXEntitlements"/>
-                <DeployClass Name="AndroidGDBServer">
-                    <Platform Name="Android">
-                        <RemoteDir>library\lib\armeabi-v7a</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="iPhone_Launch640">
+                <DeployClass Name="iPad_Launch2048">
                     <Platform Name="iOSDevice">
                         <Operation>1</Operation>
                     </Platform>
@@ -245,6 +290,12 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
+                <DeployClass Name="Android_LauncherIcon144">
+                    <Platform Name="Android">
+                        <RemoteDir>res\drawable-xxhdpi</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                </DeployClass>
                 <DeployClass Name="iPhone_Launch320">
                     <Platform Name="iOSDevice">
                         <Operation>1</Operation>
@@ -253,15 +304,11 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="Android_LauncherIcon144">
-                    <Platform Name="Android">
-                        <RemoteDir>res\drawable-xxhdpi</RemoteDir>
+                <DeployClass Name="iPhone_Launch640">
+                    <Platform Name="iOSDevice">
                         <Operation>1</Operation>
                     </Platform>
-                </DeployClass>
-                <DeployClass Name="AndroidLibnativeMipsFile">
-                    <Platform Name="Android">
-                        <RemoteDir>library\lib\mips</RemoteDir>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -343,6 +390,12 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
+                <DeployClass Name="AndroidLibnativeArmeabiFile">
+                    <Platform Name="Android">
+                        <RemoteDir>library\lib\armeabi</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                </DeployClass>
                 <DeployClass Required="true" Name="ProjectOutput">
                     <Platform Name="iOSDevice">
                         <Operation>1</Operation>
@@ -358,12 +411,6 @@
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSSimulator">
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
-                <DeployClass Name="AndroidLibnativeArmeabiFile">
-                    <Platform Name="Android">
-                        <RemoteDir>library\lib\armeabi</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -398,15 +445,15 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="Android_LauncherIcon36">
-                    <Platform Name="Android">
-                        <RemoteDir>res\drawable-ldpi</RemoteDir>
-                        <Operation>1</Operation>
-                    </Platform>
-                </DeployClass>
                 <DeployClass Name="AndroidSplashStyles">
                     <Platform Name="Android">
                         <RemoteDir>res\values</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                </DeployClass>
+                <DeployClass Name="Android_LauncherIcon36">
+                    <Platform Name="Android">
+                        <RemoteDir>res\drawable-ldpi</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -439,8 +486,8 @@
                 <ProjectRoot Platform="iOSDevice" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
             </Deployment>
         </BorlandProject>
         <ProjectFileVersion>12</ProjectFileVersion>

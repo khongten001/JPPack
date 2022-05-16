@@ -1,18 +1,16 @@
-unit JPP.Common.Procs;
+﻿unit JPP.Common.Procs;
 
-{$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+{$I jpp.inc}
+{$IFDEF FPC}{$mode delphi}{$ENDIF}
 
 interface
 
 uses
-  {$IFDEF DCC}
-  Winapi.Windows,
-  System.SysUtils, System.Classes, System.UITypes,
-  Vcl.Controls, Vcl.Buttons, Vcl.Graphics, Vcl.Dialogs //, JPL.Math;
-  {$ELSE}
-  SysUtils, Classes, Controls, Graphics, LCLType, LCLIntf //, JPL.Math;
-  {$ENDIF}
-  , JPP.Common;
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  SysUtils, Classes, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}{$ENDIF}
+  Forms, Controls, Graphics, StdCtrls,
+  {$IFDEF FPC}LCLType, LCLIntf,{$ENDIF}
+  JPL.Rects, JPP.Common;
 
 
 function FontStylesToStr(FontStyles: TFontStyles): string;
@@ -24,7 +22,7 @@ function StrToAlignment(AlignmentStr: string; Default: TAlignment = taLeftJustif
 
 procedure MakeListFromStr(LineToParse: string; var List: TStringList; Separator: string = ',');
 function PadLeft(const Text: string; const PadToLen: integer; PaddingChar: Char = ' '): string;
-procedure SaveStringToFile(s: string; fName: string);
+procedure SaveStringToFile(const Content, FileName: string);
 
 procedure JppFrame3D(Canvas: TCanvas; var Rect: TRect; LeftColor, RightColor, TopColor, BottomColor: TColor; Width: Integer); overload;
 procedure JppFrame3D(Canvas: TCanvas; var Rect: TRect; Color: TColor; Width: integer); overload;
@@ -32,9 +30,8 @@ procedure DrawTopBorder(Canvas: TCanvas; Rect: TRect; Pen: TPen; b3D: Boolean = 
 procedure DrawBottomBorder(Canvas: TCanvas; Rect: TRect; Pen: TPen; b3D: Boolean = True);
 procedure DrawLeftBorder(Canvas: TCanvas; Rect: TRect; Pen: TPen; b3D: Boolean = True);
 procedure DrawRightBorder(Canvas: TCanvas; Rect: TRect; Pen: TPen; b3D: Boolean = True);
+procedure DrawRectEx(const Canvas: TCanvas; const ARect: TRect; bDrawLeft, bDrawRight, bDrawTop, bDrawBottom: Boolean; Border3D: Boolean = False);
 
-
-function GetMiddlePosY(const R: TRect; const TextHeight: integer): integer;
 procedure DrawRectTopBorder(Canvas: TCanvas; Rect: TRect; Color: TColor; PenWidth: integer; PenStyle: TPenStyle = psSolid; ExtraSpace: integer = 0);
 procedure DrawRectBottomBorder(Canvas: TCanvas; Rect: TRect; Color: TColor; PenWidth: integer; PenStyle: TPenStyle = psSolid; ExtraSpace: integer = 0);
 procedure DrawRectLeftBorder(Canvas: TCanvas; Rect: TRect; Color: TColor; PenWidth: integer; PenStyle: TPenStyle = psSolid; ExtraSpace: integer = 0);
@@ -42,28 +39,262 @@ procedure DrawRectRightBorder(Canvas: TCanvas; Rect: TRect; Color: TColor; PenWi
 
 procedure DrawCenteredText(Canvas: TCanvas; Rect: TRect; const Text: string; DeltaX: integer = 0; DeltaY: integer = 0);
 
-procedure InflateRectEx(var ARect: TRect; const DeltaLeft, DeltaRight, DeltaTop, DeltaBottom: integer); overload;
-procedure InflateRectEx(var ARect: TRect; const Margins: TJppMargins); overload;
+function GetFontName(const FontNameArray: array of string): string;
+
+procedure InflateRectWithMargins(var ARect: TRect; const Margins: TJppMargins);
+
+
+procedure DrawShadowText(const Canvas: TCanvas; const Text: string; ARect: TRect; const Flags: Cardinal; const NormalColor, ShadowColor: TColor;
+  ShadowShiftX: ShortInt = 1; ShadowShiftY: ShortInt = 1);
+
+function TextPosToRectPos(const Alignment: TAlignment; const Layout: TTextLayout): TRectPos;
+
+function TrimTextToFitRect(const Canvas: TCanvas; const Text: string; const ARect: TRect; TextFlags: UINT; Delimiters: string = ' '#9; UseEllipsis: Boolean = True): string;
+
+function DrawTextEx(DC: HDC; const Text: string; var ARect: TRect; Flags: UINT): integer; overload;
+function DrawTextEx(Canvas: TCanvas; const Text: string; var ARect: TRect; Flags: UINT): integer; overload;
+function DrawTextEx(Canvas: TCanvas; const Text: string; var ARect: TRect; Flags: UINT; const Layout: TTextLayout; const Alignment: TAlignment;
+  const WordWrap: Boolean; const EllipsisPosition: TEllipsisPosition; const ShowAccelChar: Boolean): integer; overload;
+function DrawTextEx(Canvas: TCanvas; const Text: string; var ARect: TRect; Flags: UINT; const Layout: TTextLayout; const Alignment: TAlignment;
+  const WordWrap: Boolean; const EllipsisPosition: TEllipsisPosition; const ShowAccelChar: Boolean; ShadowParams: TJppShadowParamsRec): integer; overload;
+
+function DrawCtrlTextBiDiModeFlags(AControl: TControl; Flags: Longint): Longint;
+
 
 
 implementation
 
 
-procedure InflateRectEx(var ARect: TRect; const DeltaLeft, DeltaRight, DeltaTop, DeltaBottom: integer);
+function DrawCtrlTextBiDiModeFlags(AControl: TControl; Flags: Longint): Longint;
+var
+  Alignment: TAlignment;
 begin
-  ARect.Inflate(DeltaLeft, DeltaTop, DeltaRight, DeltaBottom);
+  Result := Flags;
+  if AControl.UseRightToLeftAlignment then
+  begin
+    if Flags and DT_RIGHT <> 0 then Alignment := taRightJustify
+    else if Flags and DT_CENTER <> 0 then Alignment := taCenter
+    else Alignment := taLeftJustify;
+
+    case Alignment of
+      taLeftJustify: Result := Result or DT_RIGHT;
+      taRightJustify: Result := Result and not DT_RIGHT;
+    end;
+  end;
+
+  if AControl.UseRightToLeftReading then Result := Result or DT_RTLREADING;
 end;
 
-procedure InflateRectEx(var ARect: TRect; const Margins: TJppMargins); overload;
+function TrimTextToFitRect(const Canvas: TCanvas; const Text: string; const ARect: TRect; TextFlags: UINT; Delimiters: string = ' '#9; UseEllipsis: Boolean = True): string;
+var
+  EllipsisWidth, FontHeight, RectHeight, DelimPos: integer;
+  R: TRect;
+  s, TempText: string;
 begin
-  InflateRectEx(ARect, -Margins.Left, -Margins.Right, -Margins.Top, -Margins.Bottom);
+  Result := Text;
+  if Text = '' then Exit;
+  EllipsisWidth := Canvas.TextWidth('...');
+  FontHeight := Canvas.Font.Height;
+  TextFlags := TextFlags or DT_CALCRECT;
+  s := Text;
+  TempText := Text;
+
+  while True do
+  begin
+
+    R := ARect;
+    if UseEllipsis then Dec(R.Right, EllipsisWidth);
+    DrawTextEx(Canvas, TempText, R, TextFlags);
+    RectHeight := R.Height;
+
+    if (RectHeight > ARect.Height) and (RectHeight > FontHeight) then
+    begin
+      DelimPos := LastDelimiter(DELIMITERS, s);
+      if DelimPos = 0 then DelimPos := Length(s);
+      Dec(DelimPos);
+
+      // ByteType:
+      //   http://docwiki.embarcadero.com/Libraries/Sydney/en/System.SysUtils.ByteType
+      //   https://www.freepascal.org/docs-html/rtl/sysutils/bytetype.html
+      if ByteType(s, DelimPos) = mbLeadByte then Dec(DelimPos);
+
+      s := Copy(s, 1, DelimPos);
+
+      if UseEllipsis then TempText := s + '...'
+      else TempText := s;
+
+      if s = '' then Break;
+    end
+    else Break;
+
+  end; // while
+
+  Result := TempText;
+
+end;
+
+function DrawTextEx(DC: HDC; const Text: string; var ARect: TRect; Flags: UINT): integer; overload;
+begin
+  {$IFDEF MSWINDOWS}
+
+    {$IFDEF FPC}
+    Result := DrawText(DC, PChar(Text), -1, ARect, Flags);
+    {$ELSE}
+    Result := DrawTextW(DC, PChar(Text), -1, ARect, Flags);
+    {$ENDIF}
+
+  {$ELSE}
+  // FPC Linux
+  Result := DrawText(DC, PChar(Text), -1, ARect, Flags);
+  {$ENDIF}
+end;
+
+function DrawTextEx(Canvas: TCanvas; const Text: string; var ARect: TRect; Flags: UINT): integer; overload;
+begin
+  Result := DrawTextEx(Canvas.Handle, Text, ARect, Flags);
+end;
+
+function DrawTextEx(Canvas: TCanvas; const Text: string; var ARect: TRect; Flags: UINT; const Layout: TTextLayout; const Alignment: TAlignment;
+  const WordWrap: Boolean; const EllipsisPosition: TEllipsisPosition; const ShowAccelChar: Boolean): integer; overload;
+var
+  ShadowParams: TJppShadowParamsRec;
+begin
+  ShadowParams.Clear;
+  Result := DrawTextEx(Canvas, Text, ARect, Flags, Layout, Alignment, WordWrap, EllipsisPosition, ShowAccelChar, ShadowParams);
+end;
+
+{.$DEFINE DEBUG_DRAWTEXTEX}
+function DrawTextEx(Canvas: TCanvas; const Text: string; var ARect: TRect; Flags: UINT; const Layout: TTextLayout; const Alignment: TAlignment;
+  const WordWrap: Boolean; const EllipsisPosition: TEllipsisPosition; const ShowAccelChar: Boolean; ShadowParams: TJppShadowParamsRec): integer; overload;
+var
+  RectPos: TRectPos;
+  TextRect: TRect;
+  bCalcOnly: Boolean;
+  OldFontColor: TColor;
+  DisplayText: string;
+begin
+  Result := 0;
+  if Text = '' then Exit;
+
+  DisplayText := Text;
+  bCalcOnly := Flags and DT_CALCRECT = DT_CALCRECT;
+  RectPos := TextPosToRectPos(Alignment, Layout);
+
+  if WordWrap then Flags := Flags or DT_WORDBREAK
+  else Flags := Flags or DT_SINGLELINE;
+
+  case EllipsisPosition of
+    epPathEllipsis: Flags := Flags or DT_PATH_ELLIPSIS;
+    epEndEllipsis: Flags := Flags or DT_END_ELLIPSIS;
+    epWordEllipsis: Flags := Flags or DT_WORD_ELLIPSIS;
+  end;
+
+  case Alignment of
+    taLeftJustify: Flags := Flags or DT_LEFT;
+    taCenter: Flags := Flags or DT_CENTER;
+    taRightJustify: Flags := Flags or DT_RIGHT;
+  end;
+
+  if not ShowAccelChar then Flags := Flags or DT_NOPREFIX;
+
+  TextRect := ARect;
+  Result := DrawTextEx(Canvas, DisplayText, TextRect, Flags or DT_CALCRECT);
+
+  // DrawText does not handle Ellipsis if the DT_WORDBREAK flag is set
+  if WordWrap and (EllipsisPosition in [epEndEllipsis, epWordEllipsis]) then
+    DisplayText := TrimTextToFitRect(Canvas, DisplayText, ARect, Flags and not DT_EXPANDTABS, ' '#9, True);
+
+  AlignRect(ARect, TextRect, RectPos);
+  if TextRect.Bottom > ARect.Bottom then TextRect.Offset(0, -(TextRect.Bottom - ARect.Bottom));
+  if TextRect.Top < ARect.Top then TextRect.SetLocation(TextRect.Left, ARect.Top);
+  if TextRect.Height > ARect.Height then TextRect.Height := ARect.Height;
+
+  ARect := TextRect;
+  if bCalcOnly then Exit;
+
+  if (ShadowParams.Color <> clNone) and ( (ShadowParams.ShiftX <> 0) or (ShadowParams.ShiftY <> 0) ) then
+  begin
+    OffsetRect(TextRect, ShadowParams.ShiftX, ShadowParams.ShiftY);
+    OldFontColor := Canvas.Font.Color;
+    Canvas.Font.Color := ShadowParams.Color;
+    DrawTextEx(Canvas, DisplayText, TextRect, Flags);
+    Canvas.Font.Color := OldFontColor;
+    OffsetRect(TextRect, -ShadowParams.ShiftX, -ShadowParams.ShiftY);
+  end;
+
+  Result := DrawTextEx(Canvas, DisplayText, TextRect, Flags);
+
+  {$IFDEF DEBUG_DRAWTEXTEX}
+  Canvas.Pen.Color := clLime;
+  Canvas.Pen.Style := psDot;
+  Canvas.Pen.Width := 1;
+  Canvas.Rectangle(TextRect);
+  {$ENDIF}
+end;
+
+function TextPosToRectPos(const Alignment: TAlignment; const Layout: TTextLayout): TRectPos;
+begin
+  Result := rpTopLeft;
+
+  case Alignment of
+    taLeftJustify:
+        case Layout of
+          tlTop: Result := rpTopLeft;
+          tlCenter: Result := rpLeftCenter;
+          tlBottom: Result := rpBottomLeft;
+        end;
+    taCenter:
+      case Layout of
+        tlTop: Result := rpTopCenter;
+        tlCenter: Result := rpCenter;
+        tlBottom: Result := rpBottomCenter;
+      end;
+    taRightJustify:
+      case Layout of
+        tlTop: Result := rpTopRight;
+        tlCenter: Result := rpRightCenter;
+        tlBottom: Result := rpBottomRight;
+      end;
+  end;
+end;
+
+procedure DrawShadowText(const Canvas: TCanvas; const Text: string; ARect: TRect; const Flags: Cardinal; const NormalColor, ShadowColor: TColor;
+  ShadowShiftX: ShortInt = 1; ShadowShiftY: ShortInt = 1);
+begin
+  if ShadowColor <> clNone then
+  begin
+    OffsetRect(ARect, ShadowShiftX, ShadowShiftY);
+    Canvas.Font.Color := ShadowColor;
+    DrawText(Canvas.Handle, PChar(Text), Length(Text), ARect, Flags);
+    OffsetRect(ARect, -ShadowShiftX, -ShadowShiftY);
+  end;
+
+  Canvas.Font.Color := NormalColor;
+  DrawText(Canvas.Handle, PChar(Text), Length(Text), ARect, Flags);
+end;
+
+function GetFontName(const FontNameArray: array of string): string;
+var
+  FontName: string;
+  i: integer;
+begin
+  for i := Low(FontNameArray) to High(FontNameArray) do
+  begin
+    FontName := FontNameArray[i];
+    if Screen.Fonts.IndexOf(FontName) >= 0 then // DONE: tu powinno być chyba >= 0
+    begin
+      Result := FontName;
+      Break;
+    end;
+  end;
 end;
 
 
-function GetMiddlePosY(const R: TRect; const TextHeight: integer): integer;
+procedure InflateRectWithMargins(var ARect: TRect; const Margins: TJppMargins);
 begin
-  Result := R.Top + (R.Height div 2) - (TextHeight div 2);
+  JPL.Rects.InflateRectEx(ARect, -Margins.Left, -Margins.Right, -Margins.Top, -Margins.Bottom);
 end;
+
 
 
 {$region '              Drawing procs                 '}
@@ -74,8 +305,8 @@ var
 begin
   with Canvas do
   begin
-    x := Rect.Left + (Rect.Width div 2) - (TextWidth(Text) div 2) + DeltaX;
-    y := Rect.Top + (Rect.Height div 2) - (TextHeight(Text) div 2) + DeltaY;
+    x := Rect.Left + (RectWidth(Rect) div 2) - (TextWidth(Text) div 2) + DeltaX;
+    y := Rect.Top + (RectHeight(Rect) div 2) - (TextHeight(Text) div 2) + DeltaY;
     TextOut(x, y, Text);
   end;
 end;
@@ -196,8 +427,8 @@ var
   OldWidth, Width: integer;
 begin
   OldWidth := Canvas.Pen.Width;
-  Canvas.Pen.Width := 1;
   Width := Pen.Width;
+  Canvas.Pen.Width := 1;
 
   Canvas.Pen.Color := Pen.Color;
   Canvas.Pen.Style := Pen.Style;
@@ -220,8 +451,9 @@ var
   OldWidth, Width: integer;
 begin
   OldWidth := Canvas.Pen.Width;
-  Canvas.Pen.Width := 1;
   Width := Pen.Width;
+  Canvas.Pen.Width := 1;
+
   Dec(Rect.Right);
 
   Canvas.Pen.Color := Pen.Color;
@@ -246,8 +478,9 @@ var
   OldWidth, Width: integer;
 begin
   OldWidth := Canvas.Pen.Width;
-  Canvas.Pen.Width := 1;
   Width := Pen.Width;
+  Canvas.Pen.Width := 1;
+
   Dec(Rect.Bottom);
   Dec(Rect.Left);
   Dec(Rect.Right);
@@ -273,8 +506,9 @@ var
   OldWidth, Width: integer;
 begin
   OldWidth := Canvas.Pen.Width;
-  Canvas.Pen.Width := 1;
   Width := Pen.Width;
+  Canvas.Pen.Width := 1;
+
   Dec(Rect.Top);
   Dec(Rect.Bottom);
 
@@ -294,24 +528,50 @@ begin
   Canvas.Pen.Width := OldWidth;
 end;
 
+procedure DrawRectEx(const Canvas: TCanvas; const ARect: TRect; bDrawLeft, bDrawRight, bDrawTop, bDrawBottom: Boolean; Border3D: Boolean = False);
+begin
+  if bDrawLeft then DrawLeftBorder(Canvas, ARect, Canvas.Pen, Border3D);
+  if bDrawRight then DrawRightBorder(Canvas, ARect, Canvas.Pen, Border3D);
+  if bDrawTop then DrawTopBorder(Canvas, ARect, Canvas.Pen, Border3D);
+  if bDrawBottom then DrawBottomBorder(Canvas, ARect, Canvas.Pen, Border3D);
+end;
+
 procedure JppFrame3D(Canvas: TCanvas; var Rect: TRect; LeftColor, RightColor, TopColor, BottomColor: TColor; Width: Integer);
 
   procedure DoRect;
   begin
     with Canvas, Rect do
     begin
-      Pen.Color := TopColor;
-      MoveTo(Left, Top);
-      LineTo(Right, Top);
 
-      Pen.Color := RightColor;
-      LineTo(Right, Bottom);
+      if TopColor <> clNone then
+      begin
+        Pen.Color := TopColor;
+        MoveTo(Left, Top);
+        LineTo(Right, Top);
+      end
+      else MoveTo(Right, Top);
 
-      Pen.Color := BottomColor;
-      LineTo(Left, Bottom);
+      if RightColor <> clNone then
+      begin
+        Pen.Color := RightColor;
+        LineTo(Right, Bottom);
+      end
+      else MoveTo(Right, Bottom);
 
-      Pen.Color := LeftColor;
-      LineTo(Left, Top);
+      if BottomColor <> clNone then
+      begin
+        Pen.Color := BottomColor;
+        LineTo(Left, Bottom);
+      end
+      else MoveTo(Left, Bottom);
+
+      if LeftColor <> clNone then
+      begin
+        Pen.Color := LeftColor;
+        LineTo(Left, Top);
+      end
+      else MoveTo(Left, Top);
+
     end;
   end;
 
@@ -338,14 +598,15 @@ begin
 end;
 {$endregion Drawing procs}
 
-procedure SaveStringToFile(s: string; fName: string);
+
+procedure SaveStringToFile(const Content, FileName: string);
 var
   sl: TStringList;
 begin
   sl := TStringList.Create;
   try
-    sl.Text := s;
-    sl.SaveToFile(fName);
+    sl.Text := Content;
+    sl.SaveToFile(FileName);
   finally
     sl.Free;
   end;

@@ -4,32 +4,27 @@ unit JPP.LinkLabel;
   Jacek Pazera
   http://www.pazera-software.com
   https://github.com/jackdp
-  Last mod: 2019.05.25
 }
 
+
+{$I jpp.inc}
 {$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
 
 interface
 
 uses
-  {$IFDEF MSWINDOWS}
-  Windows,
-  ShellAPI,
-  {$ENDIF}
-  {$IFDEF DCC}
-  Winapi.Messages, System.SysUtils, System.Classes, System.UITypes,
-  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Buttons, Vcl.GraphUtil, Vcl.Dialogs, Vcl.ActnList, Vcl.Themes,
-  {$ELSE}
-  SysUtils, Messages, Classes, Controls, StdCtrls, Graphics, ActnList, LCLIntf, LCLType,
-  {$ENDIF}
-  //JPP.Types, JPP.Graphics,
-  JPP.Common;
+  {$IFDEF MSWINDOWS}Windows, ShellAPI,{$ENDIF}
+  Messages, SysUtils, Classes, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}{$ENDIF}
+  Controls, Graphics, StdCtrls, {Buttons, GraphUtil, Dialogs,} ActnList, Themes,
+  {$IFDEF FPC}LCLIntf, LCLType,{$ENDIF}
+  JPP.Common, JPP.AnchoredControls;
 
 type
 
   //TJppLinkLabelTagExt = class(TJppTagExt);
 
   TJppLinkLabelClickActionType = (catGoToURL, catExecuteAction);
+  TJppOnLinkLabelClickEx = procedure(const ACaption, AURL: string; var Handled: Boolean) of object;
 
 
   {$region ' ---------- TJppCustomLinkLabel ---------- '}
@@ -49,6 +44,8 @@ type
     FFontVisitedNormal: TFont;
     FVisited: Boolean;
     FFontVisitedHot: TFont;
+    FAnchoredControls: TJppAnchoredControls;
+    FOnClickEx: TJppOnLinkLabelClickEx;
 
     //class constructor Create;
     procedure SetTagExt(const Value: TJppTagExt);
@@ -63,18 +60,22 @@ type
     procedure SetFontVisitedNormal(const Value: TFont);
     procedure SetVisited(const Value: Boolean);
     procedure SetFontVisitedHot(const Value: TFont);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
 
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
+    procedure AssignFontParams(Src: TJppCustomLinkLabel);
   protected
-    procedure CmMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
-    procedure CmMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
+    procedure CMMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
+    procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     procedure Click; override;
     procedure SetEnabled(Value: Boolean); override;
     property Font;
     procedure FontNormalChange(Sender: TObject);
     procedure FontVisitedChange(Sender: TObject);
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   published
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
     property FontNormal: TFont read FFontNormal write SetFontNormal;
@@ -89,6 +90,8 @@ type
     property CursorHot: TCursor read FCursorHot write SetCursorHot default crHandPoint;
     property CursorDisabled: TCursor read FCursorDisabled write SetCursorDisabled default crDefault;
     property Visited: Boolean read FVisited write SetVisited default False;
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
+    property OnClickEx: TJppOnLinkLabelClickEx read FOnClickEx write FOnClickEx;
   end;
   {$endregion TJppCustomLinkLabel}
 
@@ -111,7 +114,7 @@ type
     property CursorDisabled;
     property Visited;
 
-    {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
+    {$IFDEF HAS_STYLE_ELEMENTS} property StyleElements; {$ENDIF}
     property Cursor default crHandPoint;
 
     property Align;
@@ -137,7 +140,7 @@ type
     property PopupMenu;
     property ShowAccelChar;
     property ShowHint;
-    {$IFDEF DCC} property Touch; {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE} property Touch; {$ENDIF}
     property Transparent;
     property Layout;
     property Visible;
@@ -149,7 +152,7 @@ type
     property OnDragOver;
     property OnEndDock;
     property OnEndDrag;
-    {$IFDEF DCC} property OnGesture; {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE} property OnGesture; {$ENDIF}
     {$IFDEF DCC} property OnMouseActivate; {$ENDIF}
     property OnMouseDown;
     property OnMouseMove;
@@ -170,7 +173,7 @@ type
 //  end;
 
 
-procedure SetJppLinkLabelFonts(lbl: TJppCustomLinkLabel; FontName: string = 'Segoe UI'; FontSize: integer = 8);
+procedure SetJppLinkLabelFonts(lbl: TJppCustomLinkLabel; FontName: string = 'Segoe UI'; FontSize: integer = 9);
 procedure SetJppLinkLabelColors(lbl: TJppCustomLinkLabel; clNormal, clHot, clDisabled, clVisitedNormal, clVisitedHot: TColor); overload;
 procedure SetJppLinkLabelColors(lbl: TJppCustomLinkLabel; Color: TColor); overload;
 
@@ -195,7 +198,7 @@ begin
   SetJppLinkLabelColors(lbl, Color, Color, Color, Color, Color);
 end;
 
-procedure SetJppLinkLabelFonts(lbl: TJppCustomLinkLabel; FontName: string = 'Segoe UI'; FontSize: integer = 8);
+procedure SetJppLinkLabelFonts(lbl: TJppCustomLinkLabel; FontName: string = 'Segoe UI'; FontSize: integer = 9);
 begin
   lbl.FontNormal.Name := FontName;
   lbl.FontNormal.Size := FontSize;
@@ -229,6 +232,8 @@ begin
   FVisited := False;
   FTagExt := TJppTagExt.Create(Self);
 
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
+
   FFontNormal := TFont.Create;
   FFontHot := TFont.Create;
   FFontDisabled := TFont.Create;
@@ -238,7 +243,7 @@ begin
   FFontNormal.Color := clBlue;
   FFontNormal.Style := [];
   Font.Assign(FFontNormal);
-  FFontNormal.OnChange := {$IFDEF FPC} @ {$ENDIF}FontNormalChange;
+  FFontNormal.OnChange := {$IFDEF FPC}@{$ENDIF}FontNormalChange;
 
   FFontHot.Color := clBlue;
   FFontHot.Style := [fsUnderline];
@@ -248,7 +253,7 @@ begin
 
   FFontVisitedNormal.Color := clPurple;
   FFontVisitedNormal.Style := FFontNormal.Style;
-  FFontVisitedNormal.OnChange := {$IFDEF FPC} @ {$ENDIF}FontVisitedChange;
+  FFontVisitedNormal.OnChange := {$IFDEF FPC}@{$ENDIF}FontVisitedChange;
 
   FFontVisitedHot.Color := FFontVisitedNormal.Color;
   FFontVisitedHot.Style := FFontHot.Style;
@@ -266,13 +271,14 @@ begin
   FFontDisabled.Free;
   FFontVisitedNormal.Free;
   FFontVisitedHot.Free;
+  FAnchoredControls.Free;
   inherited;
 end;
   {$endregion Create & Destroy}
 
 
   {$region ' ------------- Mouse Enter & Leave -------------- '}
-procedure TJppCustomLinkLabel.CmMouseEnter(var Msg: TMessage);
+procedure TJppCustomLinkLabel.CMMouseEnter(var Msg: TMessage);
 begin
   inherited;
 
@@ -288,7 +294,7 @@ begin
   end;
 end;
 
-procedure TJppCustomLinkLabel.CmMouseLeave(var Msg: TMessage);
+procedure TJppCustomLinkLabel.CMMouseLeave(var Msg: TMessage);
 begin
   inherited;
 
@@ -307,12 +313,22 @@ end;
 
 
   {$region ' --------------- Click ------------------- '}
+
 procedure TJppCustomLinkLabel.Click;
+var
+  Handled: Boolean;
 begin
   inherited;
 
   if csDesigning in ComponentState then Exit;
   if not FEnabled then Exit;
+
+  if Assigned(FOnClickEx) then
+  begin
+    Handled := False;
+    FOnClickEx(Caption, URL, Handled);
+    if Handled then Exit;
+  end;
 
   if (FClickActionType = catGoToURL) and (FURL <> '') then
   begin
@@ -321,8 +337,10 @@ begin
     {$IFDEF MSWINDOWS}
     ShellExecute(0, 'open', PChar(FURL), '', '', SW_SHOW);
     {$ELSE}
-    if (Copy(FURL, 1, 4) = 'http') or (Copy(FURL, 1, 4) = 'www.') then OpenURL(FURL)
-    else OpenDocument(FURL);
+      {$IFDEF FPC}
+      if (Copy(FURL, 1, 4) = 'http') or (Copy(FURL, 1, 4) = 'www.') then OpenURL(FURL)
+      else OpenDocument(FURL);
+      {$ENDIF}
     {$ENDIF}
   end
   else if FClickActionType = catExecuteAction then
@@ -336,6 +354,42 @@ begin
 end;
   {$endregion Click}
 
+
+procedure TJppCustomLinkLabel.AssignFontParams(Src: TJppCustomLinkLabel);
+begin
+  Font.Assign(Src.Font);
+  FontDisabled.Assign(Src.FontDisabled);
+  FontHot.Assign(Src.FontHot);
+  FontNormal.Assign(Src.FontNormal);
+  FontVisitedHot.Assign(Src.FontVisitedHot);
+  FontVisitedNormal.Assign(Src.FontVisitedNormal);
+end;
+
+procedure TJppCustomLinkLabel.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppCustomLinkLabel.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
+procedure TJppCustomLinkLabel.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
+end;
 
 procedure TJppCustomLinkLabel.SetEnabled(Value: Boolean);
 begin
@@ -377,7 +431,6 @@ begin
   FClickActionType := Value;
 end;
 
-
 procedure TJppCustomLinkLabel.SetCursorDisabled(const Value: TCursor);
 begin
   FCursorDisabled := Value;
@@ -390,29 +443,27 @@ end;
 
 procedure TJppCustomLinkLabel.SetFontVisitedHot(const Value: TFont);
 begin
-  FFontVisitedHot := Value;
+  if Assigned(FFontVisitedHot) and Assigned(Value) then FFontVisitedHot.Assign(Value);
 end;
 
 procedure TJppCustomLinkLabel.SetFontDisabled(const Value: TFont);
 begin
-  FFontDisabled := Value;
+  if Assigned(FFontDisabled) and Assigned(Value) then FFontDisabled.Assign(Value);
 end;
 
 procedure TJppCustomLinkLabel.SetFontHot(const Value: TFont);
 begin
-  FFontHot := Value;
+  if Assigned(FFontHot) and Assigned(Value) then FFontHot.Assign(Value);
 end;
-
 
 procedure TJppCustomLinkLabel.SetFontNormal(const Value: TFont);
 begin
-  FFontNormal := Value;
+  if Assigned(FFontNormal) and Assigned(Value) then FFontNormal.Assign(Value);
 end;
-
 
 procedure TJppCustomLinkLabel.SetFontVisitedNormal(const Value: TFont);
 begin
-  FFontVisitedNormal := Value;
+  if Assigned(FFontVisitedNormal) and Assigned(Value) then FFontVisitedNormal.Assign(Value);
 end;
 
 procedure TJppCustomLinkLabel.SetTagExt(const Value: TJppTagExt);
@@ -432,6 +483,7 @@ begin
     if FVisited then Font.Assign(FFontVisitedNormal)
     else Font.Assign(FFontNormal);
 end;
+
 
 {$endregion TJppCustomLinkLabel}
 

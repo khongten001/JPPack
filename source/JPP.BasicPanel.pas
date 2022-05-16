@@ -1,19 +1,23 @@
 unit JPP.BasicPanel;
 
+{
+  Jacek Pazera
+  http://www.pazera-software.com
+  https://github.com/jackdp
+}
+
+{$I jpp.inc}
 {$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
 
 interface
 
 uses
-  {$IFDEF DCC}
-  Winapi.Messages, Winapi.Windows,
-  System.SysUtils, System.Classes, System.Types, System.UITypes,
-  Vcl.Controls, Vcl.Forms, Vcl.Menus, Vcl.Graphics, Vcl.StdCtrls, Vcl.GraphUtil, Vcl.Themes, Vcl.ExtCtrls, Vcl.Dialogs,
-  {$ELSE}
-  SysUtils, Messages, LMessages, LCLType, LCLIntf, Classes, Graphics, Controls, StdCtrls, ExtCtrls,
-  {$ENDIF}
-  JPL.Colors,
-  JPP.Types, JPP.Graphics, JPP.Common, JPP.Common.Procs;
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  Messages, SysUtils, Classes, Types, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}{$ENDIF}
+  Controls, Forms, Menus, Graphics, StdCtrls, GraphUtil, Themes, ExtCtrls, Dialogs,
+  {$IFDEF FPC}LMessages, LCLType, LCLIntf,{$ENDIF}
+  JPL.Colors, JPL.Rects,
+  JPP.Types, JPP.Graphics, JPP.Common, JPP.Common.Procs, JPP.AnchoredControls;
 
 
 type
@@ -169,9 +173,11 @@ type
     FOnGradientChange: TNotifyEvent;
     FAppearance: TJppBasicPanelAppearance;
     FTagExt: TJppTagExt;
+    FAnchoredControls: TJppAnchoredControls;
     procedure SetOnGradientChange(const Value: TNotifyEvent);
     procedure SetAppearance(const Value: TJppBasicPanelAppearance);
     procedure SetTagExt(const Value: TJppTagExt);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
     procedure DrawBackground(ARect: TRect); override;
     procedure DrawBorders(ARect: TRect);
@@ -184,12 +190,16 @@ type
     procedure GetHDeltas(var dxLeft, dxRight: integer);
     procedure GetVDeltas(var dxTop, dxBottom: integer);
     procedure GetDeltas(var dxLeft, dxRight, dxTop, dxBottom: integer);
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
+
     property Canvas;
     property DockManager;
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
   published
   end;
   {$endregion}
@@ -230,7 +240,8 @@ type
     {$IFDEF DCC} property Locked; {$ENDIF}
     {$IFDEF DELPHI2009_OR_ABOVE} property Padding; {$ENDIF}
     property ParentBiDiMode;
-    property ParentBackground default false;
+    {$IFDEF DCC}property ParentBackground default false;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}property ParentBackground default false;{$ENDIF}{$ENDIF}
 //    property ParentColor;
     {$IFDEF DCC} property ParentCtl3D; {$ENDIF}
     property ParentFont;
@@ -276,16 +287,18 @@ type
     {$IFDEF MSWINDOWS}property OnDragDropFiles;{$ENDIF}
     property Appearance;
     property TagExt;
-    {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
-    {$IFDEF DCC} property Touch; {$ENDIF}
+    {$IFDEF HAS_STYLE_ELEMENTS} property StyleElements; {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE} property Touch; {$ENDIF}
     property DoubleBuffered;
-    property ParentDoubleBuffered;
+    {$IFDEF DCC}property ParentDoubleBuffered;{$ENDIF}
     {$IFDEF FPC}
+    {$IFDEF HAS_WINCONTROL_WITH_PARENTDOUBLEBUFFERED}property ParentDoubleBuffered;{$ENDIF}
     property BorderSpacing;
     //property BevelColor;
     property ChildSizing;
     property OnGetDockCaption;
     {$ENDIF}
+    property AnchoredControls;
   end;
   {$endregion}
 
@@ -362,7 +375,7 @@ end;
 
 procedure TJppCustomBasePanel.DrawBackground(ARect: TRect);
 begin
-  {$IFDEF DCC}
+  {$IFDEF HAS_VCL_STYLES}
   if (not StyleServices.Enabled) or not ParentBackground
   then
   begin
@@ -452,7 +465,8 @@ end;
 constructor TJppCustomBasicPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  ParentBackground := False;  // TJvGifAnimator needs this!
+  {$IFDEF DCC}ParentBackground := False;{$ENDIF}  // TJvGifAnimator needs this!
+  {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}ParentBackground := False;{$ENDIF}{$ENDIF}
 
   FTagExt := TJppTagExt.Create(Self);
   FAppearance := TJppBasicPanelAppearance.Create(Self);
@@ -461,12 +475,14 @@ begin
   FAppearance.UpperGradient.OnChange := {$IFDEF FPC} @ {$ENDIF}GradientChanged;
   FAppearance.BottomGradient.OnChange := {$IFDEF FPC} @ {$ENDIF}GradientChanged;
 
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 end;
 
 destructor TJppCustomBasicPanel.Destroy;
 begin
   FTagExt.Free;
   FAppearance.Free;
+  FAnchoredControls.Free;
   inherited Destroy;
 end;
 
@@ -496,8 +512,37 @@ end;
 
 procedure TJppCustomBasicPanel.GradientChanged(Sender: TObject);
 begin
+  {$IFDEF DCC}if (csDesigning in ComponentState) and (not (csLoading in ComponentState)) and ParentBackground then ParentBackground := False;{$ENDIF}
+  {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}
   if (csDesigning in ComponentState) and (not (csLoading in ComponentState)) and ParentBackground then ParentBackground := False;
+  {$ENDIF}{$ENDIF}
   Invalidate;
+end;
+
+procedure TJppCustomBasicPanel.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
+procedure TJppCustomBasicPanel.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
+end;
+
+procedure TJppCustomBasicPanel.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
 end;
 
 procedure TJppCustomBasicPanel.SetAppearance(const Value: TJppBasicPanelAppearance);
@@ -534,11 +579,11 @@ procedure TJppCustomBasicPanel.DrawBackground(ARect: TRect);
 var
   R: TRect;
   xBottomGradientTop: integer;
-  {$IFDEF DCC} bVclStyle: Boolean; {$ENDIF}
+  {$IFDEF HAS_VCL_STYLES} bVclStyle: Boolean; {$ENDIF}
   Border: TJppBasicPanelBorder;
   xBottom: integer;
 
-  {$IFDEF DCC}
+  {$IFDEF HAS_VCL_STYLES}
   Rect: TRect;
   LColor: TColor;
   LStyle: TCustomStyleServices;
@@ -557,18 +602,28 @@ var
 
 begin
 
+  {$IFDEF DCC}
   if ParentBackground then
   begin
     DrawBorders(ARect);
     Exit;
   end;
+  {$ENDIF}
 
-  {$IFDEF DCC}
+  {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}
+  if ParentBackground then
+  begin
+    DrawBorders(ARect);
+    Exit;
+  end;
+  {$ENDIF}{$ENDIF}
+
+  {$IFDEF HAS_VCL_STYLES}
   bVclStyle := Assigned(TStyleManager.ActiveStyle) and (TStyleManager.ActiveStyle.Name <> 'Windows');
   {$ENDIF}
 
   //if (not bVclStyle) or (bVclStyle and (not (seClient in StyleElements))) then
-  {$IFDEF DCC}if (not bVclStyle) {$IF RTLVersion > 23} or (bVclStyle and (not (seClient in StyleElements))) {$IFEND} then{$ENDIF}
+  {$IFDEF HAS_VCL_STYLES}if (not bVclStyle) {$IFDEF HAS_STYLE_ELEMENTS} or (bVclStyle and (not (seClient in StyleElements))) {$ENDIF} then{$ENDIF}
   begin
 
     Canvas.Brush.Style := bsClear;
@@ -599,7 +654,7 @@ begin
       end;
 
       xBottom := R.Bottom;
-      R.Bottom := R.Top + Round((Appearance.UpperGradientPercent * R.Height) / 100);
+      R.Bottom := R.Top + Round((Appearance.UpperGradientPercent * RectHeight(R)) / 100);
       xBottomGradientTop := R.Bottom;
       Appearance.UpperGradient.Draw(Canvas, R);
 
@@ -609,10 +664,10 @@ begin
 
     end;
 
-  end{$IFDEF FPC};{$ENDIF}
+  end
+  {$IFNDEF HAS_VCL_STYLES};{$ENDIF}
 
-
-  {$IFDEF DCC}
+  {$IFDEF HAS_VCL_STYLES}
   else
 
   // VCL Style
@@ -626,7 +681,7 @@ begin
     BaseTopColor := clBtnHighlight;
     BaseBottomColor := clBtnShadow;
 
-    if LStyle.Enabled {$IF RTLVersion > 23} and (seClient in StyleElements) {$IFEND} then
+    if LStyle.Enabled {$IFDEF HAS_STYLE_ELEMENTS} and (seClient in StyleElements) {$ENDIF} then
     begin
 
       LDetails := LStyle.GetElementDetails(tpPanelBackground);

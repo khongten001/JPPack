@@ -1,19 +1,26 @@
-unit JPP.SimplePanel;
+﻿unit JPP.SimplePanel;
 
+{
+  Jacek Pazera
+  https://www.pazera-software.com
+  https://github.com/jackdp
+}
+
+
+{$I jpp.inc}
 {$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+
 
 interface
 
 uses
-  {$IFDEF DCC}
-  Winapi.Messages, Winapi.Windows,
-  System.SysUtils, System.Classes, System.Types, System.UITypes,
-  Vcl.Controls, Vcl.Forms, Vcl.Menus, Vcl.Graphics, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Dialogs,
-  {$ELSE}
-  SysUtils, Messages, LMessages, LCLType, LCLIntf, Classes, Graphics, Controls, StdCtrls, ExtCtrls,
-  {$ENDIF}
-  JPL.Colors,
-  JPP.Types, JPP.Graphics, JPP.Common, JPP.Common.Procs;
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  Messages,
+  SysUtils, Classes, Types, {$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}
+  Controls, Forms, Menus, Graphics, StdCtrls, ExtCtrls, Dialogs,
+  {$IFDEF FPC}LMessages, LCLType, LCLIntf,{$ENDIF}
+  JPL.Colors, JPL.Rects,
+  JPP.Types, JPP.Graphics, JPP.Gradient, JPP.AnchoredControls, JPP.Common, JPP.Common.Procs;
 
 
 type
@@ -31,6 +38,7 @@ type
     FDrawLeftBorder: Boolean;
     FDrawRightBorder: Boolean;
     FBorderStyle: TPenStyle;
+    FBackroundColorTo: TColor;
     procedure SetOnChange(const Value: TNotifyEvent);
     procedure SetBackgroundColor(const Value: TColor);
     procedure SetBorderColor(const Value: TColor);
@@ -39,6 +47,7 @@ type
     procedure SetDrawLeftBorder(const Value: Boolean);
     procedure SetDrawRightBorder(const Value: Boolean);
     procedure SetBorderStyle(const Value: TPenStyle);
+    procedure SetBackroundColorTo(const Value: TColor);
   protected
     procedure PropsChanged(Sender: TObject);
   public
@@ -47,6 +56,7 @@ type
     procedure Assign(Source: TJppSimplePanelAppearance); reintroduce;
   published
     property BackgroundColor: TColor read FBackgroundColor write SetBackgroundColor default clBtnFace;
+    property BackroundColorTo: TColor read FBackroundColorTo write SetBackroundColorTo default clNone;
     property BorderColor: TColor read FBorderColor write SetBorderColor default clGray;
     property DrawTopBorder: Boolean read FDrawTopBorder write SetDrawTopBorder default True;
     property DrawBottomBorder: Boolean read FDrawBottomBorder write SetDrawBottomBorder default True;
@@ -70,10 +80,12 @@ type
     FOnVisibleChanging: TNotifyEvent;
     FOnAfterDrawBackground: TNotifyEvent;
     {$IFDEF MSWINDOWS}FOnDragDropFiles: TProcOnOnDragDropFiles;{$ENDIF}
+    FCaptionMargin: integer;
     procedure CMMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     {$IFDEF MSWINDOWS}procedure CMDropFiles(var msg: TWMDropFiles); message WM_DROPFILES;{$ENDIF}
     procedure PropsChanged(Sender: TObject);
+    procedure SetCaptionMargin(const Value: integer);
   protected
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
@@ -92,6 +104,7 @@ type
     property OnPaint: TNotifyEvent read FOnPaint write FOnPaint;
     property OnVisibleChanging: TNotifyEvent read FOnVisibleChanging write FOnVisibleChanging;
     {$IFDEF MSWINDOWS}property OnDragDropFiles: TProcOnOnDragDropFiles read FOnDragDropFiles write FOnDragDropFiles;{$ENDIF}
+    property CaptionMargin: integer read FCaptionMargin write SetCaptionMargin default 6;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -105,8 +118,10 @@ type
   private
     FAppearance: TJppSimplePanelAppearance;
     FTagExt: TJppTagExt;
+    FAnchoredControls: TJppAnchoredControls;
     procedure SetAppearance(const Value: TJppSimplePanelAppearance);
     procedure SetTagExt(const Value: TJppTagExt);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
     procedure DrawBackground(ARect: TRect); override;
     procedure DrawBorders(ARect: TRect);
@@ -115,9 +130,13 @@ type
     procedure Paint; override;
     procedure AdjustClientRect(var Rect: TRect); override;
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
+
     property Canvas;
     property DockManager;
   published
@@ -133,8 +152,10 @@ type
     property Anchors;
     property AutoSize;
     property BiDiMode;
-//    property Color;
+//    property Color; use Appearance.BackgroundColor
     property Constraints;
+    property Caption;
+    property CaptionMargin;
     {$IFDEF DCC} property Ctl3D; {$ENDIF}
     property UseDockManager default True;
     property DockSite;
@@ -147,7 +168,10 @@ type
     {$IFDEF DCC} property Locked; {$ENDIF}
     {$IFDEF DELPHI2009_OR_ABOVE} property Padding; {$ENDIF}
     property ParentBiDiMode;
+    {$IFDEF DCC}property ParentBackground default false;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}
     property ParentBackground default false;
+    {$ENDIF}{$ENDIF}
     {$IFDEF DCC} property ParentCtl3D; {$ENDIF}
     property ParentFont;
     property ParentShowHint;
@@ -189,15 +213,19 @@ type
     {$IFDEF MSWINDOWS}property OnDragDropFiles;{$ENDIF}
     property Appearance;
     property TagExt;
-    {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
-    {$IFDEF DCC} property Touch; {$ENDIF}
+    {$IFDEF HAS_STYLE_ELEMENTS} property StyleElements; {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE} property Touch; {$ENDIF}
     property DoubleBuffered;
+    {$IFDEF DCC}property ParentDoubleBuffered;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_WINCONTROL_WITH_PARENTDOUBLEBUFFERED}
     property ParentDoubleBuffered;
+    {$ENDIF}{$ENDIF}
     {$IFDEF FPC}
     property BorderSpacing;
     property ChildSizing;
     property OnGetDockCaption;
     {$ENDIF}
+    property AnchoredControls;
   end;
   {$endregion}
 
@@ -210,6 +238,7 @@ constructor TJppCustomBaseSimplePanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   BevelOuter := bvNone;
+  FCaptionMargin := 6;
 end;
 
 destructor TJppCustomBaseSimplePanel.Destroy;
@@ -224,6 +253,13 @@ end;
 
 procedure TJppCustomBaseSimplePanel.PropsChanged(Sender: TObject);
 begin
+  Invalidate;
+end;
+
+procedure TJppCustomBaseSimplePanel.SetCaptionMargin(const Value: integer);
+begin
+  if FCaptionMargin = Value then Exit;
+  FCaptionMargin := Value;
   Invalidate;
 end;
 
@@ -244,7 +280,8 @@ begin
   if Assigned(FOnAfterDrawBackground) then FOnAfterDrawBackground(Self);
 
   if (Caption <> '') {$IFDEF DELPHI2009_OR_ABOVE} and (ShowCaption) {$ENDIF}
-  then begin
+  then
+  begin
     TextRect := Rect;
     DrawCaption(TextRect);
   end;
@@ -258,8 +295,31 @@ begin
 end;
 
 procedure TJppCustomBaseSimplePanel.DrawCaption(aRect: TRect);
+var
+  x, y, tw, th: integer;
 begin
-  //
+  {$IFDEF DCC}if not ShowCaption then Exit;{$ENDIF}
+  if Caption = '' then Exit;
+
+  with Canvas do
+  begin
+    Font.Assign(Self.Font);
+    tw := TextWidth(Caption);
+    th := TextHeight(Caption);
+    case Alignment of
+      taLeftJustify: x := 0;
+      taCenter: x := (aRect.Width div 2) - tw div 2;
+      taRightJustify: x := aRect.Width - tw;
+    else
+      x := 0;
+    end;
+
+    if (Alignment = taLeftJustify) and (FCaptionMargin <> 0) then x := x + FCaptionMargin
+    else if (Alignment = taRightJustify) and (FCaptionMargin <> 0) then x := x - FCaptionMargin;
+
+    y := (aRect.Height div 2) - (th div 2);
+    TextOut(x, y, Caption);
+  end;
 end;
 
   {$endregion}
@@ -325,17 +385,22 @@ end;
 constructor TJppCustomSimplePanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  {$IFDEF DCC}ParentBackground := False;{$ENDIF}
+  {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}
   ParentBackground := False;
+  {$ENDIF}{$ENDIF}
 
   FTagExt := TJppTagExt.Create(Self);
   FAppearance := TJppSimplePanelAppearance.Create(Self);
   FAppearance.OnChange := {$IFDEF FPC} @ {$ENDIF}PropsChanged;
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 end;
 
 destructor TJppCustomSimplePanel.Destroy;
 begin
   FTagExt.Free;
   FAppearance.Free;
+  FAnchoredControls.Free;
   inherited Destroy;
 end;
 
@@ -343,6 +408,33 @@ procedure TJppCustomSimplePanel.PropsChanged(Sender: TObject);
 begin
   if csLoading in ComponentState then Exit;
   Invalidate;
+  Self.Color := FAppearance.BackgroundColor;
+end;
+
+procedure TJppCustomSimplePanel.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppCustomSimplePanel.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
+procedure TJppCustomSimplePanel.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
 end;
 
 procedure TJppCustomSimplePanel.SetAppearance(const Value: TJppSimplePanelAppearance);
@@ -371,17 +463,40 @@ procedure TJppCustomSimplePanel.DrawBackground(ARect: TRect);
 var
   R: TRect;
 begin
+  // Fix controls color, when DoubleBuffered = True
+  // Gdy na panelu z włączonym DoubleBuffered umieszczone były kontrolki, to
+  // "pobierały" one kolor z właściwości Color panelu.
+  // To rozwiązuje problem koloru tła kontrolek, ale tylko gdy nie jest używany gradient.
+  Self.Color := FAppearance.BackgroundColor;
 
+  {$IFDEF DCC}
   if ParentBackground then
   begin
     DrawBorders(ARect);
     Exit;
   end;
+  {$ENDIF}
 
-  Canvas.Brush.Style := bsClear;
+  {$IFDEF FPC}{$IFDEF HAS_PANEL_WITH_PARENTBACKGROUND}
+  if ParentBackground then
+  begin
+    DrawBorders(ARect);
+    Exit;
+  end;
+  {$ENDIF}{$ENDIF}
+
   R := ARect;
-  Canvas.Brush.Color := Appearance.BackgroundColor;
-  Canvas.FillRect(R);
+
+  if Appearance.BackroundColorTo <> clNone then
+  begin
+    JppGradientFill(Canvas, R, Appearance.BackgroundColor, Appearance.BackroundColorTo, gtVertical);
+  end
+  else
+  begin
+    Canvas.Brush.Style := bsClear;
+    Canvas.Brush.Color := Appearance.BackgroundColor;
+    Canvas.FillRect(R);
+  end;
 
   DrawBorders(ARect);
 
@@ -401,7 +516,8 @@ begin
   if Appearance.DrawTopBorder then DrawTopBorder(Canvas, ARect, Canvas.Pen, False);
   if Appearance.DrawBottomBorder then DrawBottomBorder(Canvas, ARect, Canvas.Pen, False);
 end;
-  {$endregion DrawBorders}
+
+{$endregion DrawBorders}
 
 
 {$endregion TJppCustomSimplePanel}
@@ -422,6 +538,7 @@ begin
   FBorderStyle := psSolid;
 
   FBackgroundColor := clBtnFace;
+  FBackroundColorTo := clNone;
 end;
 
 destructor TJppSimplePanelAppearance.Destroy;
@@ -432,6 +549,7 @@ end;
 procedure TJppSimplePanelAppearance.Assign(Source: TJppSimplePanelAppearance);
 begin
   FBackgroundColor := Source.BackgroundColor;
+  FBackroundColorTo := Source.BackroundColorTo;
   FBorderColor := Source.BorderColor;
   FDrawTopBorder := Source.DrawTopBorder;
   FDrawBottomBorder := Source.DrawBottomBorder;
@@ -449,6 +567,13 @@ end;
 procedure TJppSimplePanelAppearance.SetBackgroundColor(const Value: TColor);
 begin
   FBackgroundColor := Value;
+  PropsChanged(Self);
+end;
+
+procedure TJppSimplePanelAppearance.SetBackroundColorTo(const Value: TColor);
+begin
+  if FBackroundColorTo = Value then Exit;
+  FBackroundColorTo := Value;
   PropsChanged(Self);
 end;
 

@@ -1,24 +1,27 @@
-unit JPP.DoubleLabel;
+﻿unit JPP.DoubleLabel;
 
 {
   Jacek Pazera
   https://github.com/jackdp
-  Last mod: 2019.05.25
 
   A simple label component composed of 2 captions: left (property Caption) and right (property RightCaption).
   The space between captions can be modified by Spacing property.
 
   Based on TJppDoubleLineLabel which is based on TPegtopLineLabel from Pegtop Common Components by Jens Gruschel (http://www.pegtop.net/delphi).
   More information in file JPP.DoubleLineLabel.pas
+
+  2021.01.14
+  Windows.DrawText
 }
 
-{$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+{$I jpp.inc}
+{$IFDEF FPC}{$mode delphi}{$ENDIF}
 
 interface
 
 uses
-  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
-  Messages, Classes, Graphics, Controls, StdCtrls, JPP.Common {$IFDEF FPC}, LCLType, LCLIntf, LMessages, Types{$ENDIF};
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF} SysUtils,
+  Messages, Classes, Graphics, Controls, StdCtrls, JPL.Rects, JPP.Common, JPP.AnchoredControls {$IFDEF FPC}, LCLType, LCLIntf, LMessages, Types{$ENDIF};
 
 type
 
@@ -36,6 +39,15 @@ type
     FShowAccelChar: Boolean;
     FRightCaptionPosDeltaY: ShortInt;
     FTagExt: TJppTagExt;
+    FLeftCaptionWidth: integer;
+    FLeftCaptionAlignment: TAlignment;
+    FRightCaptionPrefix: string;
+    FRightCaptionPostfix: string;
+    FDisabledTextColor: TColor;
+    FRightCaptionDisabledTextColor: TColor;
+    FRightCaptionDisabledColor: TColor;
+    FRightCaptionDiabledBorderColor: TColor;
+    FAnchoredControls: TJppAnchoredControls;
     procedure CMTextChanged(var Msg: TMessage); message CM_TEXTCHANGED;
     procedure SetRightCaption(Value: TCaption);
     procedure SetLayout(Value: TTextLayout);
@@ -50,11 +62,23 @@ type
     procedure SetShowAccelChar(const Value: Boolean);
     procedure SetRightCaptionPosDeltaY(const Value: ShortInt);
     procedure SetTagExt(const Value: TJppTagExt);
+    procedure SetLeftCaptionWidth(const Value: integer);
+    procedure SetLeftCaptionAlignment(const Value: TAlignment);
+    procedure SetRightCaptionPrefix(const Value: string);
+    procedure SetRightCaptionPostfix(const Value: string);
+    function FullRightCaptionText: string;
+    procedure SetDisabledTextColor(const Value: TColor);
+    procedure SetRightCaptionDisabledTextColor(const Value: TColor);
+    procedure SetRightCaptionDisabledColor(const Value: TColor);
+    procedure SetRightCaptionDiabledBorderColor(const Value: TColor);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
     procedure Paint; override;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
   published
     property RightCaption: TCaption read FRightCaption write SetRightCaption;
     property Layout: TTextLayout read FLayout write SetLayout default tlTop;
@@ -66,6 +90,7 @@ type
     property DragKind;
     property DragCursor;
     property DragMode;
+    property Enabled;
     property Font;
     property ParentBiDiMode;
     property ParentColor;
@@ -73,7 +98,7 @@ type
     property ParentShowHint;
     property PopupMenu;
     property ShowHint;
-    {$IFDEF DCC}{$IF CompilerVersion > 23}property StyleElements;{$IFEND}{$ENDIF}
+    {$IFDEF DCC}{$IFDEF HAS_STYLE_ELEMENTS}property StyleElements;{$ENDIF}{$ENDIF}
     property Visible;
     property OnClick;
     property OnContextPopup;
@@ -101,10 +126,27 @@ type
     property ShowAccelChar: Boolean read FShowAccelChar write SetShowAccelChar default False;
     property RightCaptionPosDeltaY: ShortInt read FRightCaptionPosDeltaY write SetRightCaptionPosDeltaY default 0;
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
+    property LeftCaptionWidth: integer read FLeftCaptionWidth write SetLeftCaptionWidth default -1;
+    // LeftCaptionAlignment is used when LeftCaptionWidth > 0
+    property LeftCaptionAlignment: TAlignment read FLeftCaptionAlignment write SetLeftCaptionAlignment default taLeftJustify;
+    property RightCaptionPrefix: string read FRightCaptionPrefix write SetRightCaptionPrefix;
+    property RightCaptionPostfix: string read FRightCaptionPostfix write SetRightCaptionPostfix;
+
+    property DisabledTextColor: TColor read FDisabledTextColor write SetDisabledTextColor default clGrayText;
+    property RightCaptionDisabledTextColor: TColor read FRightCaptionDisabledTextColor write SetRightCaptionDisabledTextColor default clGrayText;
+    property RightCaptionDisabledColor: TColor read FRightCaptionDisabledColor write SetRightCaptionDisabledColor default clNone;
+    property RightCaptionDiabledBorderColor: TColor read FRightCaptionDiabledBorderColor write SetRightCaptionDiabledBorderColor default clNone;
+
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
+
+    {$IFDEF FPC}
+    property BorderSpacing;
+    {$ENDIF}
   end;
 
 
 implementation
+
 
 
 constructor TJppDoubleLabel.Create(AOwner: TComponent);
@@ -113,10 +155,18 @@ begin
   Width := 121;
   Height := 13;
   FRightCaption := 'RightCaption';
+
   FRightCaptionFont := TFont.Create;
-  FRightCaptionFont.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FRightCaptionFont.OnChange := PropsChanged;
   FRightCaptionColor := clNone;
   FRightCaptionBorderColor := clNone;
+
+//  FRightCaptionFont.Name := Self.Font.Name;
+//  FRightCaptionFont.Size := Self.Font.SIZE;
+  {$IFDEF MSWINDOWS}
+  FRightCaptionFont.Name := 'Segoe UI';
+  {$ENDIF}
+
   FSpacing := 6;
   FAutoWidth := True;
   FAutoHeight := True;
@@ -124,19 +174,61 @@ begin
   FShowAccelChar := False;
   FRightCaptionPosDeltaY := 0;
   FTagExt := TJppTagExt.Create(Self);
+
+  FLeftCaptionWidth := -1;
+  FLeftCaptionAlignment := taLeftJustify;
+
+  FDisabledTextColor := clGrayText;
+  FRightCaptionDisabledTextColor := clGrayText;
+  FRightCaptionDisabledColor := clNone;
+  FRightCaptionDiabledBorderColor := clNone;
+
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 end;
 
 destructor TJppDoubleLabel.Destroy;
 begin
   FRightCaptionFont.Free;
   FTagExt.Free;
+  FAnchoredControls.Free;
   inherited;
+end;
+
+procedure TJppDoubleLabel.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppDoubleLabel.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
+procedure TJppDoubleLabel.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
+end;
+
+function TJppDoubleLabel.FullRightCaptionText: string;
+begin
+  Result := FRightCaptionPrefix + FRightCaption + FRightCaptionPostfix;
 end;
 
 procedure TJppDoubleLabel.Paint;
 var
   CaptionSize, RightCaptionSize: TSize;
-  CaptionRect, RightCaptionRect: TRect;
+  LeftCaptionRect, RightCaptionRect: TRect;
   CaptionTop, RightCaptionTop: Integer;
   Metric: TTextMetric;
   //X1, X2, Y: Integer;
@@ -144,6 +236,8 @@ var
   clBg, clPen: TColor;
   dtFormat: Cardinal;
   PosDeltaY: integer;
+  TextFormat: Cardinal;
+  s: string;
 begin
   inherited;
 
@@ -155,11 +249,12 @@ begin
   CaptionSize := Canvas.TextExtent(Caption);
 
   Canvas.Font.Assign(FRightCaptionFont);
-  RightCaptionSize := Canvas.TextExtent(FRightCaption);
+  RightCaptionSize := Canvas.TextExtent(FullRightCaptionText);
   xRightCaptionHeight := RightCaptionSize.cy;
 
   Canvas.Font.Assign(Font);
 
+  if not Enabled then Canvas.Font.Color := FDisabledTextColor;
 
   //if CaptionSize.CX > ClientWidth - RightCaptionSize.CX - 2 then CaptionSize.CX := ClientWidth - RightCaptionSize.CX - 2;
 
@@ -199,20 +294,21 @@ begin
   end; // case
 
 
-  CaptionRect := Rect(0, CaptionTop, CaptionSize.CX, CaptionTop + CaptionSize.CY);
+  LeftCaptionRect := Rect(0, CaptionTop, CaptionSize.CX, CaptionTop + CaptionSize.CY);
+  if FLeftCaptionWidth > 0 then LeftCaptionRect.Width := FLeftCaptionWidth;
 
-  RightCaptionRect.Left := CaptionRect.Left + CaptionRect.Width + FSpacing;
+  RightCaptionRect.Left := LeftCaptionRect.Left + LeftCaptionRect.Width + FSpacing;
   RightCaptionRect.Top := RightCaptionTop;
   RightCaptionRect.Width := RightCaptionSize.cx;
-  RightCaptionRect.Bottom := RightCaptionTop + xRightCaptionHeight + 0;
+  RightCaptionRect.Bottom := RightCaptionTop + xRightCaptionHeight + 0;//1;
 
   if not FAutoWidth then
   begin
     if RightCaptionRect.Right > ClientWidth then RightCaptionRect.Right := ClientWidth;
   end;
 
-  if FAutoHeight then
-    if CaptionRect.Height > RightCaptionRect.Height then Self.Height := CaptionRect.Height
+  if (FAutoHeight) and (Align <> alLeft) and (Align <> alRight) and (Align <> alClient) then
+    if LeftCaptionRect.Height > RightCaptionRect.Height then Self.Height := LeftCaptionRect.Height
     else Self.Height := RightCaptionRect.Height;
 
   // draw:
@@ -227,9 +323,21 @@ begin
   // --------------------- Caption text ----------------------
   if Caption <> '' then
   begin
-    {$IFDEF MSWINDOWS}Windows.{$ENDIF}DrawText(
-      Canvas.Handle, PChar(Caption), Length(Caption), CaptionRect, DT_LEFT or DT_END_ELLIPSIS or DT_EXPANDTABS or DT_NOCLIP
-    );
+    if FLeftCaptionWidth > 0 then
+    begin
+      case FLeftCaptionAlignment of
+        taLeftJustify: TextFormat := DT_LEFT;
+        taCenter: TextFormat := DT_CENTER;
+        taRightJustify: TextFormat := DT_RIGHT;
+      {$IFDEF DCC}
+      else TextFormat := DT_LEFT;
+      {$ENDIF}
+      end;
+      TextFormat := TextFormat or DT_END_ELLIPSIS or DT_EXPANDTABS or DT_NOCLIP;
+    end
+    else TextFormat := DT_LEFT or DT_END_ELLIPSIS or DT_EXPANDTABS or DT_NOCLIP;
+    //{$IFDEF MSWINDOWS}Windows.{$ENDIF}DrawText(Canvas.Handle, PChar(Caption), Length(Caption), LeftCaptionRect, TextFormat);
+    DrawText(Canvas.Handle, PChar(Caption), Length(Caption), LeftCaptionRect, TextFormat);
   end;
 
   // ------------------ RightCaption text ------------------------
@@ -238,9 +346,17 @@ begin
   begin
     RightCaptionRect.Top := RightCaptionRect.Top + PosDeltaY;
     Font.Assign(RightCaptionFont);
-
-    clBg := FRightCaptionColor;
-    clPen := FRightCaptionBorderColor;
+    if not Enabled then
+    begin
+      Font.Color := FRightCaptionDisabledTextColor;
+      clBg := FRightCaptionDisabledColor;
+      clPen := FRightCaptionDiabledBorderColor;
+    end
+    else
+    begin
+      clBg := FRightCaptionColor;
+      clPen := FRightCaptionBorderColor;
+    end;
 
     if (clBg <> clNone) or (clPen <> clNone) then
     begin
@@ -257,7 +373,9 @@ begin
       if clPen <> clNone then
       begin
         Pen.Style := psSolid;
-        Pen.Color := FRightCaptionBorderColor;
+        if Enabled then Pen.Color := FRightCaptionBorderColor
+        else Pen.Color := FRightCaptionDiabledBorderColor;
+        RightCaptionRect.Top := RightCaptionRect.Top -1; // 2021.07.17 - bez tej poprawki dolna krawędź obramowania często jest niewidoczna
       end;
 
       Rectangle(RightCaptionRect);
@@ -271,7 +389,7 @@ begin
     dtFormat := DT_LEFT or DT_NOCLIP;
 
     {$IFDEF MSWINDOWS}
-    case FEllipsisPosition of
+    {%H-}case FEllipsisPosition of
       epPathEllipsis: dtFormat := dtFormat or DT_PATH_ELLIPSIS;
       epEndEllipsis: dtFormat := dtFormat or DT_END_ELLIPSIS;
       epWordEllipsis: dtFormat := dtFormat or DT_WORD_ELLIPSIS;
@@ -280,15 +398,16 @@ begin
 
     if not FShowAccelChar then dtFormat := dtFormat + DT_NOPREFIX;
 
-    {$IFDEF MSWINDOWS}Windows.{$ENDIF}DrawText(Canvas.Handle, PChar(FRightCaption), Length(FRightCaption), RightCaptionRect, dtFormat);
+    s := FullRightCaptionText;
+    //{$IFDEF MSWINDOWS}Windows.{$ENDIF}DrawText(Canvas.Handle, PChar(s), Length(s), RightCaptionRect, dtFormat);
+    DrawText(Canvas.Handle, PChar(s), Length(s), RightCaptionRect, dtFormat);
 
   end; // with Canvas
 
 
-  if FAutoWidth then Self.Width := CaptionRect.Width + FSpacing + RightCaptionRect.Width;
+  if FAutoWidth and (Align <> alTop) and (Align <> alBottom) then Self.Width := LeftCaptionRect.Width + FSpacing + RightCaptionRect.Width;
 
 end;
-
 
 procedure TJppDoubleLabel.PropsChanged(Sender: TObject);
 begin
@@ -324,16 +443,52 @@ begin
   Invalidate;
 end;
 
+procedure TJppDoubleLabel.SetRightCaptionDiabledBorderColor(const Value: TColor);
+begin
+  FRightCaptionDiabledBorderColor := Value;
+  if not Enabled then Invalidate;
+end;
+
+procedure TJppDoubleLabel.SetRightCaptionDisabledColor(const Value: TColor);
+begin
+  FRightCaptionDisabledColor := Value;
+  if not Enabled then Invalidate;
+end;
+
+procedure TJppDoubleLabel.SetRightCaptionDisabledTextColor(const Value: TColor);
+begin
+  FRightCaptionDisabledTextColor := Value;
+  if not Enabled then Invalidate;
+end;
+
 procedure TJppDoubleLabel.SetRightCaptionFont(const Value: TFont);
 begin
-  FRightCaptionFont := Value;
-  Invalidate;
+  //FRightCaptionFont := Value;
+  if Assigned(FRightCaptionFont) and Assigned(Value) then
+  begin
+    FRightCaptionFont.Assign(Value);
+    Invalidate;
+  end;
 end;
 
 procedure TJppDoubleLabel.SetRightCaptionPosDeltaY(const Value: ShortInt);
 begin
   if FRightCaptionPosDeltaY = Value then Exit;
   FRightCaptionPosDeltaY := Value;
+  Invalidate;
+end;
+
+procedure TJppDoubleLabel.SetRightCaptionPostfix(const Value: string);
+begin
+  if FRightCaptionPostfix = Value then Exit;
+  FRightCaptionPostfix := Value;
+  Invalidate;
+end;
+
+procedure TJppDoubleLabel.SetRightCaptionPrefix(const Value: string);
+begin
+  if FRightCaptionPrefix = Value then Exit;
+  FRightCaptionPrefix := Value;
   Invalidate;
 end;
 
@@ -370,6 +525,12 @@ begin
   Invalidate;
 end;
 
+procedure TJppDoubleLabel.SetDisabledTextColor(const Value: TColor);
+begin
+  FDisabledTextColor := Value;
+  if not Enabled then Invalidate;
+end;
+
 {$IFDEF MSWINDOWS}
 procedure TJppDoubleLabel.SetEllipsisPosition(const Value: TEllipsisPosition);
 begin
@@ -388,5 +549,19 @@ begin
   end;
 end;
 
+
+procedure TJppDoubleLabel.SetLeftCaptionAlignment(const Value: TAlignment);
+begin
+  if FLeftCaptionAlignment = Value then Exit;
+  FLeftCaptionAlignment := Value;
+  Invalidate;
+end;
+
+procedure TJppDoubleLabel.SetLeftCaptionWidth(const Value: integer);
+begin
+  if FLeftCaptionWidth = Value then Exit;
+  FLeftCaptionWidth := Value;
+  Invalidate;
+end;
 
 end.

@@ -1,22 +1,24 @@
 unit JPP.Edit;
 
+{
+  Jacek Pazera
+  http://www.pazera-software.com
+  https://github.com/jackdp
+}
+
+{$I jpp.inc}
 {$IFDEF FPC} {$mode delphi} {$ENDIF}
+
 
 interface
 
-
 uses
   {$IFDEF MSWINDOWS}Windows,{$ENDIF}
-  {$IFDEF DCC}
-  Winapi.Messages,
-  System.SysUtils, System.Classes, System.Types, System.UITypes,
-  Vcl.Controls, Vcl.Graphics, Vcl.ExtCtrls,
-  {$ELSE}
-  SysUtils, Classes, Types, Controls, Graphics, ExtCtrls, LCLType, LCLIntf, Messages, LMessages,
-  {$ENDIF}
-
-  JPP.Common, JPP.Flash
-  ;
+  Messages,
+  SysUtils, Classes, Types, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UITypes,{$ENDIF}{$ENDIF}
+  Controls, Graphics, StdCtrls, ExtCtrls,
+  {$IFDEF FPC}LCLType, LCLIntf, LMessages,{$ENDIF}
+  JPP.Common, JPP.Common.Procs, JPP.AnchoredControls, JPP.Flash;
 
 
 type
@@ -44,6 +46,7 @@ type
   public
     constructor Create(AOwner: TComponent);
     destructor Destroy; override;
+    procedure Assign(Source: TJppCustomEditAppearance); reintroduce;
   published
     property NormalBgColor: TColor read FNormalBgColor write SetNormalBgColor default clWindow;
     property NormalTextColor: TColor read FNormalTextColor write SetNormalTextColor default clWindowText;
@@ -58,6 +61,7 @@ type
 
   TJppCustomEdit = class;
 
+  {$Region ' --- TJppFlashJppEdit --- '}
   TJppFlashJppEdit = class(TJppFlashBase) // nazwa TJppFlashEdit ju¿ jest zajêta
   private
     FEdit: TJppCustomEdit;
@@ -83,38 +87,59 @@ type
     property FlashInterval;
     property OnFlashFinished;
   end;
+  {$endregion TJppFlashJppEdit}
+
 
   {$region ' --- TJppCustomEdit --- '}
-  TJppCustomEdit = class(TCustomLabeledEdit)
+  TJppCustomEdit = class(TCustomEdit)
   private
+    FBoundLabel: TJppControlBoundLabel;
     FMouseOverControl: Boolean;
     {$IFDEF MSWINDOWS} FTabOnEnter: Boolean; {$ENDIF}
     FTagExt: TJppTagExt;
     FShowLabel: Boolean;
     FAppearance: TJppCustomEditAppearance;
     FFlash: TJppFlashJppEdit;
+    FBoundLabelSpacing: Integer;
+    FBoundLabelPosition: TLabelPosition;
+    FAnchoredControls: TJppAnchoredControls;
     procedure SetTagExt(const Value: TJppTagExt);
     procedure SetShowLabel(const Value: Boolean);
     procedure CMMouseEnter (var Message: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave (var Message: TMessage); message CM_MOUSELEAVE;
     procedure SetAppearance(const Value: TJppCustomEditAppearance);
     procedure SetFlash(const Value: TJppFlashJppEdit);
+    procedure SetBoundLabelPosition(const Value: TLabelPosition);
+    procedure SetBoundLabelSpacing(const Value: Integer);
+    procedure AdjustLabelBounds(Sender: TObject);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
+    procedure SetParent(AParent: TWinControl); override;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+    procedure CMEnabledChanged(var Message: TMessage); message CM_ENABLEDCHANGED;
+    procedure CMVisibleChanged(var Message: TMessage); message CM_VISIBLECHANGED;
+    procedure CMBiDiModeChanged(var Message: TMessage); message CM_BIDIMODECHANGED;
     procedure DoEnter; override;
     procedure DoExit; override;
     {$IFDEF MSWINDOWS} procedure KeyPress(var Key: Char); override; {$ENDIF}
     procedure PropsChanged(Sender: TObject);
     procedure Loaded; override;
-    procedure CMEnabledchanged(var Message: TMessage); message CM_ENABLEDCHANGED;
+
     procedure ApplyAppearance;
     property MouseOverControl: Boolean read FMouseOverControl;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    //property MouseOverControl: Boolean read FMouseOverControl;
-    //property Color;
+
     procedure FlashBackground;
+    procedure SetupInternalLabel;
+    procedure SetBounds(ALeft: Integer; ATop: Integer; AWidth: Integer; AHeight: Integer); override;
+    procedure ApplyFontColor(const TextColor: TColor; Normal: Boolean = True; Hot: Boolean = True; Focused: Boolean = True; Disabled: Boolean = False);
   protected
+    property BoundLabel: TJppControlBoundLabel read FBoundLabel;
+    property BoundLabelPosition: TLabelPosition read FBoundLabelPosition write SetBoundLabelPosition default lpLeft;
+    property BoundLabelSpacing: Integer read FBoundLabelSpacing write SetBoundLabelSpacing default 4;
+
     property Appearance: TJppCustomEditAppearance read FAppearance write SetAppearance;
     {$IFDEF MSWINDOWS}
     property TabOnEnter: Boolean read FTabOnEnter write FTabOnEnter; // if True, after pressing the Enter key, the focus is moved to the next control
@@ -122,12 +147,18 @@ type
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
     property ShowLabel: Boolean read FShowLabel write SetShowLabel default True;
     property Flash: TJppFlashJppEdit read FFlash write SetFlash;
+
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
   end;
   {$endregion TJppCustomEdit}
 
 
   {$region ' --- TJppEdit --- '}
   TJppEdit = class(TJppCustomEdit)
+  public
+    property MouseOverControl;
+  published
+    property Align;
     property Alignment;
     property Anchors;
     property AutoSelect;
@@ -139,89 +170,105 @@ type
     property BevelOuter;
     {$ENDIF}
     property BiDiMode;
+    {$IFDEF FPC}property BorderSpacing;{$ENDIF}
     property BorderStyle;
     property CharCase;
     //property Color;  Use Appearance.NormalBgColor instead
     property Constraints;
+    property Cursor;
     {$IFDEF DCC} property Ctl3D; {$ENDIF}
     property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
-    property EditLabel;
     property Enabled;
     property Font;
+    property Height;
+    property HelpContext;
+    property HelpKeyword;
+    property HelpType;
     property HideSelection;
+    property Hint;
     {$IFDEF DCC}
     property ImeMode;
     property ImeName;
     {$ENDIF}
-    property LabelPosition;
-    property LabelSpacing;
+    property Left;
     property MaxLength;
-    {$IFDEF DCC}
-    property OEMConvert;
-    {$ENDIF}
+    {$IFDEF DCC}property OEMConvert;{$ENDIF}
     property NumbersOnly;
     property ParentBiDiMode;
     property ParentColor;
     {$IFDEF DCC} property ParentCtl3D; {$ENDIF}
+    {$IFDEF DCC}property ParentDoubleBuffered;{$ENDIF}
+    {$IFDEF FPC}{$IFDEF HAS_WINCONTROL_WITH_PARENTDOUBLEBUFFERED}
     property ParentDoubleBuffered;
+    {$ENDIF}{$ENDIF}
     property ParentFont;
     property ParentShowHint;
     property PasswordChar;
     property PopupMenu;
     property ReadOnly;
     property ShowHint;
+    {$IFDEF DCC}{$IF RTLVersion > 23}property StyleElements;{$IFEND}{$ENDIF}
     property TabOrder;
     property TabStop;
+    property Tag;
     property Text;
     property TextHint;
-    {$IFDEF DCC} property Touch; {$ENDIF}
+    property Top;
+    {$IFDEF DELPHI2010_OR_ABOVE}property Touch;{$ENDIF}
     property Visible;
-    {$IFDEF DCC}{$IF RTLVersion > 23} property StyleElements; {$IFEND}{$ENDIF}
+    property Width;
+
+    // --------- Events ----------
     property OnChange;
+    {$IFDEF FPC}property OnChangeBounds;{$ENDIF}
     property OnClick;
     property OnContextPopup;
     property OnDblClick;
     property OnDragDrop;
     property OnDragOver;
+    {$IFDEF FPC}property OnEditingDone;{$ENDIF}
     property OnEndDock;
     property OnEndDrag;
     property OnEnter;
     property OnExit;
-    {$IFDEF DCC}
-    property OnGesture;
-    {$ENDIF}
+    {$IFDEF DELPHI2010_OR_ABOVE}property OnGesture;{$ENDIF}
     property OnKeyDown;
     property OnKeyPress;
     property OnKeyUp;
-    {$IFDEF DCC}
-    property OnMouseActivate;
-    {$ENDIF}
+    {$IFDEF DCC}property OnMouseActivate;{$ENDIF}
     property OnMouseDown;
     property OnMouseEnter;
     property OnMouseLeave;
     property OnMouseMove;
     property OnMouseUp;
-    property OnStartDock;
-    property OnStartDrag;
     {$IFDEF FPC}
-    property BorderSpacing;
-    property EchoMode;
-    property OnEditingDone;
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    {$ENDIF}
+    property OnResize;
+    property OnStartDock;
+    property OnStartDrag;
+    {$IFDEF FPC}
+    property EchoMode;
     property OnUTF8KeyPress;
     {$ENDIF}
-    // jp
-    property MouseOverControl; // <-- public (not published)
+
+    // --------- Custom Properties ---------
     property Appearance;
     {$IFDEF MSWINDOWS} property TabOnEnter; {$ENDIF}
     property ShowLabel;
     property Flash;
     property TagExt;
+
+    property BoundLabel;
+    property BoundLabelPosition;
+    property BoundLabelSpacing;
+
+    property AnchoredControls;
   end;
   {$endregion TJppEdit}
 
@@ -235,6 +282,10 @@ constructor TJppCustomEdit.Create(AOwner: TComponent);
 begin
   inherited;
 
+  FBoundLabelPosition := lpLeft;
+  FBoundLabelSpacing := 4;
+  SetupInternalLabel;
+
   FAppearance := TJppCustomEditAppearance.Create(AOwner);
   FAppearance.OnChange := PropsChanged;
 
@@ -243,6 +294,8 @@ begin
   FTagExt := TJppTagExt.Create(Self);
   FShowLabel := True;
   FMouseOverControl := False;
+
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 end;
 
 destructor TJppCustomEdit.Destroy;
@@ -250,6 +303,7 @@ begin
   FAppearance.Free;
   FTagExt.Free;
   FFlash.Free;
+  FAnchoredControls.Free;
   inherited;
 end;
 
@@ -258,7 +312,27 @@ begin
   inherited;
   Color := FAppearance.NormalBgColor;
   Font.Color := FAppearance.NormalTextColor;
-  EditLabel.Visible := FShowLabel;
+  //EditLabel.Visible := FShowLabel;
+end;
+
+procedure TJppCustomEdit.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppCustomEdit.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FBoundLabel then FBoundLabel := nil
+        else if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
 end;
 
 procedure TJppCustomEdit.PropsChanged(Sender: TObject);
@@ -296,9 +370,25 @@ begin
   if Font.Color <> TextColor then Font.Color := TextColor;
 end;
 
-procedure TJppCustomEdit.CMEnabledchanged(var Message: TMessage);
+procedure TJppCustomEdit.ApplyFontColor(const TextColor: TColor; Normal, Hot, Focused, Disabled: Boolean);
+begin
+  Font.Color := TextColor;
+  if Normal then FAppearance.NormalTextColor := TextColor;
+  if Hot then FAppearance.HotTextColor := TextColor;
+  if Focused then FAppearance.FocusedTextColor := TextColor;
+  if Disabled then FAppearance.DisabledTextColor := TextColor;
+end;
+
+procedure TJppCustomEdit.CMBiDiModeChanged(var Message: TMessage);
 begin
   inherited;
+  if FBoundLabel <> nil then FBoundLabel.BiDiMode := BiDiMode;
+end;
+
+procedure TJppCustomEdit.CMEnabledChanged(var Message: TMessage);
+begin
+  inherited;
+  if FBoundLabel <> nil then FBoundLabel.Enabled := Enabled;
   ApplyAppearance;
 end;
 
@@ -319,6 +409,12 @@ begin
   inherited;
   FMouseOverControl := False;
   ApplyAppearance;
+end;
+
+procedure TJppCustomEdit.CMVisibleChanged(var Message: TMessage);
+begin
+  inherited;
+  if FBoundLabel <> nil then FBoundLabel.Visible := Visible;
 end;
 
 procedure TJppCustomEdit.DoEnter;
@@ -350,22 +446,78 @@ begin
   PropsChanged(Self);
 end;
 
+procedure TJppCustomEdit.AdjustLabelBounds(Sender: TObject);
+begin
+  SetBoundLabelPosition(FBoundLabelPosition);
+end;
+
+procedure TJppCustomEdit.SetBoundLabelPosition(const Value: TLabelPosition);
+var
+  P: TPoint;
+begin
+  if FBoundLabel = nil then Exit;
+  FBoundLabelPosition := Value;
+  case Value of
+    lpAbove: P := Point(Left, Top - FBoundLabel.Height - FBoundLabelSpacing);
+    lpBelow: P := Point(Left, Top + Height + FBoundLabelSpacing);
+    lpLeft : P := Point(Left - FBoundLabel.Width - FBoundLabelSpacing, Top + ((Height - FBoundLabel.Height) div 2));
+    lpRight: P := Point(Left + Width + FBoundLabelSpacing, Top + ((Height - FBoundLabel.Height) div 2));
+  end;
+
+  FBoundLabel.SetBounds({%H-}P.x, {%H-}P.y, FBoundLabel.Width, FBoundLabel.Height);
+  FBoundLabel.Visible := FShowLabel;
+end;
+
+procedure TJppCustomEdit.SetBoundLabelSpacing(const Value: Integer);
+begin
+  FBoundLabelSpacing := Value;
+  SetBoundLabelPosition(FBoundLabelPosition);
+end;
+
+procedure TJppCustomEdit.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  SetBoundLabelPosition(FBoundLabelPosition);
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
+end;
+
 procedure TJppCustomEdit.SetFlash(const Value: TJppFlashJppEdit);
 begin
   FFlash := Value;
 end;
 
+procedure TJppCustomEdit.SetParent(AParent: TWinControl);
+begin
+  inherited;
+  if FBoundLabel <> nil then
+  begin
+    FBoundLabel.Parent := AParent;
+    FBoundLabel.Visible := True;
+  end;
+end;
+
 procedure TJppCustomEdit.SetShowLabel(const Value: Boolean);
 begin
-  if EditLabel.Visible = Value then Exit;
+  if FBoundLabel.Visible = Value then Exit;
   FShowLabel := Value;
-  EditLabel.Visible := FShowLabel;
+  FBoundLabel.Visible := FShowLabel;
 end;
 
 procedure TJppCustomEdit.SetTagExt(const Value: TJppTagExt);
 begin
   FTagExt := Value;
 end;
+
+procedure TJppCustomEdit.SetupInternalLabel;
+begin
+  if Assigned(FBoundLabel) then Exit;
+  FBoundLabel := TJppControlBoundLabel.Create(Self);
+  FBoundLabel.FreeNotification(Self);
+  FBoundLabel.OnAdjustBounds := AdjustLabelBounds;
+  FBoundLabel.FocusControl := Self;
+end;
+
 
 {$IFDEF MSWINDOWS}
 procedure TJppCustomEdit.KeyPress(var Key: Char);
@@ -405,6 +557,18 @@ end;
 destructor TJppCustomEditAppearance.Destroy;
 begin
   inherited;
+end;
+
+procedure TJppCustomEditAppearance.Assign(Source: TJppCustomEditAppearance);
+begin
+  FNormalBgColor := Source.NormalBgColor;
+  FNormalTextColor := Source.NormalTextColor;
+  FFocusedBgColor := Source.FocusedBgColor;
+  FFocusedTextColor := Source.FocusedTextColor;
+  FHotBgColor := Source.HotBgColor;
+  FHotTextColor := Source.HotTextColor;
+  FDisabledBgColor := Source.DisabledBgColor;
+  FDisabledTextColor := Source.DisabledTextColor;
 end;
 
 procedure TJppCustomEditAppearance.SetNormalTextColor(const Value: TColor);

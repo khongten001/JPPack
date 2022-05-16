@@ -7,18 +7,17 @@ unit JPP.Gradient;
   VCL.cyTypes
 }
 
+{$I jpp.inc}
 {$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
 
 interface
 
 uses
   {$IFDEF MSWINDOWS}Windows,{$ENDIF}
-  {$IFDEF DCC}
-  System.SysUtils, System.Classes, System.UITypes,
-  Vcl.Graphics;
-  {$ELSE}
-  SysUtils, Classes, Graphics, LCLType, LCLIntf;
-  {$ENDIF}
+  SysUtils, Classes, Graphics
+  {$IFDEF HAS_SYSTEM_UITYPES}, System.UITypes{$ENDIF}
+  {$IFDEF FPC}, LCLType, LCLIntf{$ENDIF}
+  ;
 
 const
   GRADIENT_BALANCE = 50;
@@ -67,27 +66,31 @@ var
   Angle: Byte;
   Balance: Word;
 begin
-  balanceMode := bmNormal;
   case GradientType of
     gtHorizontalBar, gtVerticalBar, gtDiagonalBar, gtDiagonalBar2: balanceMode := bmMirror;
+  else
+    balanceMode := bmNormal;
   end;
 
-  Orientation := dgdVertical;
   case GradientType of
     gtHorizontal, gtVerticalBar: Orientation := dgdHorizontal;
     gtRadial: Orientation := dgdRadial;
     gtDiagonal, gtDiagonal2, gtDiagonalBar, gtDiagonalBar2: Orientation := dgdAngle;
+  else
+    Orientation := dgdVertical;
   end;
 
-  Angle := 45;
   case GradientType of
     gtDiagonal2, gtDiagonalBar2: Angle := 135;
+  else
+    Angle := 45;
   end;
 
-  Balance := GRADIENT_BALANCE;
   case GradientType of
     gtTopBar: Balance := 30;
     gtBottomBar: Balance := 70;
+  else
+    Balance := GRADIENT_BALANCE;
   end;
 
   if StartColor = EndColor then

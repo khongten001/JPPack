@@ -1,25 +1,38 @@
 unit JPP.Register;
 
+{$I jpp.inc}
+
 interface
 
 uses
-  System.Classes,
+  Classes,
 
   JPP.Types,
-  JPP.BasicPanel, JPP.Panel, JPP.SimplePanel,
-  JPP.BasicPngButton, JPP.PngButton, JPP.BasicSpeedButton,
+  JPP.BasicPanel, JPP.Panel, JPP.SimplePanel, JPP.StdPanel,
+  JPP.BasicPngButton, JPP.BasicPngButtonEx, JPP.PngButton, JPP.BasicSpeedButton,
   JPP.ColorComboBox, JPP.ColorListBox, JPP.ColorSwatch,
-  JPP.LinkLabel, JPP.Timer, JPP.StorageCtrl, JPP.StringStorageCtrl,
-  JPP.FormIniStorage, JPP.PngCollection,
+  JPP.Labels, JPP.LinkLabel, JPP.Timer, JPP.StorageCtrl, JPP.StringStorageCtrl,
+  {$IFDEF DELPHI2010_OR_ABOVE}JPP.FormIniStorage,{$ENDIF}
+  JPP.PngCollection,
   JPP.DoubleLineLabel, JPP.DoubleLabel,
-  JPP.Edit
+  JPP.Edit, JPP.EditEx,
+  JPP.ComboBox, JPP.ComboBoxEx,
+  JPP.Memo, JPP.MemoEx,
+  JPP.BrushStyleComboBox, JPP.PenStyleComboBox,
+  JPP.ProgressBar, JPP.HtmlHint,
+  JPP.FlipPanel,
+  JPP.FlatComboBox,
+  JPP.CheckBox, JPP.RadioButton, JPP.DateTimePicker
+  {$IFDEF USE_GDIPLUS_CONTROLS}
+  , JPP.GPHatchStyleComboBox
+  {$ENDIF}
   ;
 
 
 
 procedure Register;
 
-  
+
 implementation
 
 
@@ -28,17 +41,26 @@ begin
   RegisterComponents(
     JPPackPageName,
     [
-      TJppBasicPanel, TJppPanel, TJppSimplePanel,
-      TJppBasicSpeedButton, TJppBasicPngButton, TJppPngButton,
+      TJppStdPanel, TJppSimplePanel, TJppBasicPanel, TJppPanel,
+      TJppBasicSpeedButton, TJppBasicPngButton, TJppBasicPngButtonEx, TJppPngButton,
       TJppColorComboBox, TJppColorListBox, TJppColorSwatch, TJppColorSwatchEx,
-      TJppLinkLabel,
+      TJppLabel, TJppShadowLabel, TJppLinkLabel,
       TJppTimer,
-      TJppStorageCtrl, 
+      TJppStorageCtrl,
       TJppStringStorageCtrl,
-      TJppFormIniStorage,
+      {$IFDEF DELPHI2010_OR_ABOVE}TJppFormIniStorage,{$ENDIF}
       TJppPngCollection,
       TJppDoubleLineLabel, TJppDoubleLabel,
-      TJppEdit
+      TJppEdit, TJppEditEx,
+      TJppCheckBox, TJppRadioButton,
+      TJppComboBox, TJppComboBoxEx, TJppFlatComboBox,
+      TJppMemo, TJppMemoEx,
+      TJppBrushStyleComboBox, TJppPenStyleComboBox, TJppDateTimePicker,
+      TJppProgressBar, TJppHtmlHint,
+      TJppFlipPanel
+      {$IFDEF USE_GDIPLUS_CONTROLS}
+      , TJppGPHatchStyleComboBox
+      {$ENDIF}
     ]
   );
 end;

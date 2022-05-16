@@ -1,11 +1,13 @@
-{ $ID: LazPngFunctions $ }
+{ $ID: LDPngFunctions $ }
 {
   Routines related to PNG processing.
 
-  Most of the code from PngFunctions.pas (PngComponents)
+  Most of the code from PngFunctions.pas (PngComponents: https://github.com/UweRaabe/PngComponents)
 
 }
 unit LDPngFunctions;
+
+{$I jpp.inc}
 
 interface
 
@@ -19,7 +21,7 @@ uses
 
 
 {$IFDEF DCC}
-{$IF RTLVersion < 20.0 }
+{$IF RTLVersion < 20.0 } // Delphi 2007 or below
   {$IF RTLVersion < 15.0 }
     PngComponents are only compatible with Delphi 7 and higher!
   {$IFEND}
@@ -326,7 +328,7 @@ end;
 
 
 {$IFDEF FPC}
-{ TODO : Implement MakeImageBlended }
+{ DONE : Implement MakeImageBlended }
 procedure MakeImageBlended(const Image: TPngImage; Amount: Byte = 127);
 var
   PngTmp: TPngImage;

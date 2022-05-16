@@ -3,7 +3,6 @@ unit JPP.DoubleLineLabel;
 {
   Jacek Pazera
   https://github.com/jackdp
-  Last mod: 2019.05.25
 
   A label component composed of 3 parts:
   1. Left caption (property Caption)
@@ -77,17 +76,24 @@ unit JPP.DoubleLineLabel;
 //   damages arising from the use of this software.
 
 
-{$IFDEF FPC} {$mode objfpc}{$H+} {$ENDIF}
+{$I jpp.inc}
+{$IFDEF FPC}{$mode delphi}{$ENDIF}
 
 interface
 
 uses
-  {$IFDEF MSWINDOWS}Windows,{$ENDIF} Messages, Classes, Graphics, Controls, StdCtrls, JPP.Common {$IFDEF FPC}, LCLType, Types, LCLIntf{$ENDIF};
+  {$IFDEF MSWINDOWS}Windows,{$ENDIF}
+  Messages, Classes, Graphics, Controls, StdCtrls, {$IFDEF DCC}{$IFDEF HAS_SYSTEM_UITYPES}System.UItypes,{$ENDIF}{$ENDIF}
+  {$IFDEF FPC}LCLType, Types, LCLIntf, {$ENDIF}
+  JPL.Rects,
+  JPP.Common, JPP.AnchoredControls
+  ;
 
 type
   TJppDoubleLabelLineStyle = (dllsNone, dllsSolid, dllsDash, dllsDot);
 
   TJppDoubleLabelLineEvent = procedure(Sender: TObject; Canvas: TCanvas; X1, X2, Y: Integer) of object;
+
 
   TJppDoubleLineLabel = class(TGraphicControl)
   private
@@ -107,6 +113,12 @@ type
     FAutoHeight: Boolean;
     FRightCaptionPosDeltaY: ShortInt;
     FTagExt: TJppTagExt;
+    FDisabledTextColor: TColor;
+    FRightCaptionDisabledTextColor: TColor;
+    FRightCaptionDiabledBorderColor: TColor;
+    FRightCaptionDisabledColor: TColor;
+    FDisabledLineColor: TColor;
+    FAnchoredControls: TJppAnchoredControls;
     procedure CMTextChanged(var Msg: TMessage); message CM_TEXTCHANGED;
     procedure SetRightCaption(Value: TCaption);
     procedure SetLayout(Value: TTextLayout);
@@ -124,17 +136,26 @@ type
     procedure SetAutoHeight(const Value: Boolean);
     procedure SetRightCaptionPosDeltaY(const Value: ShortInt);
     procedure SetTagExt(const Value: TJppTagExt);
+    procedure SetDisabledTextColor(const Value: TColor);
+    procedure SetRightCaptionDiabledBorderColor(const Value: TColor);
+    procedure SetRightCaptionDisabledColor(const Value: TColor);
+    procedure SetRightCaptionDisabledTextColor(const Value: TColor);
+    procedure SetDisabledLineColor(const Value: TColor);
+    procedure SetAnchoredControls(const Value: TJppAnchoredControls);
   protected
     procedure Paint; override;
     procedure PaintLine(X1, X2, Y: Integer); virtual;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
   published
     property RightCaption: TCaption read FRightCaption write SetRightCaption;
     property Layout: TTextLayout read FLayout write SetLayout default tlTop;
     property LineStyle: TJppDoubleLabelLineStyle read FLineStyle write SetLineStyle default dllsDot;
     property LineColor: TColor read FLineColor write SetLineColor default clGrayText;
+    property DisabledLineColor: TColor read FDisabledLineColor write SetDisabledLineColor default clGrayText;
     property LinePeriod: Integer read FLinePeriod write SetLinePeriod default 3;
     property LineSeparation: Integer read FLineSeparation write SetLineSeparation default 2;
     property OnDrawLine: TJppDoubleLabelLineEvent read FOnDrawLine write FOnDrawLine;
@@ -146,6 +167,7 @@ type
     property DragKind;
     property DragCursor;
     property DragMode;
+    property Enabled;
     property Font;
     property ParentBiDiMode;
     property ParentColor;
@@ -153,7 +175,7 @@ type
     property ParentShowHint;
     property PopupMenu;
     property ShowHint;
-    {$IFDEF DCC}{$IF CompilerVersion > 23}property StyleElements;{$IFEND}{$ENDIF}
+    {$IFDEF HAS_STYLE_ELEMENTS}property StyleElements;{$ENDIF}
     property Visible;
     property OnClick;
     property OnContextPopup;
@@ -180,6 +202,17 @@ type
     property AutoHeight: Boolean read FAutoHeight write SetAutoHeight default True;
     property RightCaptionPosDeltaY: ShortInt read FRightCaptionPosDeltaY write SetRightCaptionPosDeltaY default 0;
     property TagExt: TJppTagExt read FTagExt write SetTagExt;
+
+    property DisabledTextColor: TColor read FDisabledTextColor write SetDisabledTextColor default clGrayText;
+    property RightCaptionDisabledTextColor: TColor read FRightCaptionDisabledTextColor write SetRightCaptionDisabledTextColor default clGrayText;
+    property RightCaptionDisabledColor: TColor read FRightCaptionDisabledColor write SetRightCaptionDisabledColor default clNone;
+    property RightCaptionDiabledBorderColor: TColor read FRightCaptionDiabledBorderColor write SetRightCaptionDiabledBorderColor default clNone;
+
+    property AnchoredControls: TJppAnchoredControls read FAnchoredControls write SetAnchoredControls;
+
+    {$IFDEF FPC}
+    property BorderSpacing;
+    {$ENDIF}
   end;
 
 
@@ -193,11 +226,12 @@ begin
   Height := 13;
   FLineStyle := dllsDot;
   FLineColor := clGrayText;
+  FDisabledLineColor := clGrayText;
   FLinePeriod := 3;
   FLineSeparation := 2;
   FRightCaption := 'RightCaption';
   FRightCaptionFont := TFont.Create;
-  FRightCaptionFont.OnChange := {$IFDEF FPC}@{$ENDIF}PropsChanged;
+  FRightCaptionFont.OnChange := PropsChanged;
   //FRightCaptionFont.Assign(Font);
   LinePosDeltaY := 0;
   FRightCaptionColor := clNone;
@@ -207,13 +241,47 @@ begin
   FLineSizeDeltaX2 := 0;
   FAutoHeight := True;
   FTagExt := TJppTagExt.Create(Self);
+
+  FDisabledTextColor := clGrayText;
+  FRightCaptionDisabledTextColor := clGrayText;
+  FRightCaptionDisabledColor := clNone;
+  FRightCaptionDiabledBorderColor := clNone;
+
+  FAnchoredControls := TJppAnchoredControls.Create(Self);
 end;
 
 destructor TJppDoubleLineLabel.Destroy;
 begin
   FRightCaptionFont.Free;
   FTagExt.Free;
+  FAnchoredControls.Free;
   inherited;
+end;
+
+procedure TJppDoubleLineLabel.SetAnchoredControls(const Value: TJppAnchoredControls);
+begin
+  FAnchoredControls := Value;
+end;
+
+procedure TJppDoubleLineLabel.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+    if not (csDestroying in ComponentState) then
+      if Assigned(FAnchoredControls) then
+      begin
+        if AComponent = FAnchoredControls.Top.Control then FAnchoredControls.Top.Control := nil
+        else if AComponent = FAnchoredControls.Bottom.Control then FAnchoredControls.Bottom.Control := nil
+        else if AComponent = FAnchoredControls.Left.Control then FAnchoredControls.Left.Control := nil
+        else if AComponent = FAnchoredControls.Right.Control then FAnchoredControls.Right.Control := nil;
+      end;
+end;
+
+procedure TJppDoubleLineLabel.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+begin
+  inherited;
+  if not (csDestroying in ComponentState) then
+    if Assigned(FAnchoredControls) then FAnchoredControls.UpdateAllControlsPos;
 end;
 
 procedure TJppDoubleLineLabel.Paint;
@@ -240,6 +308,8 @@ begin
   xRightCaptionHeight := RightCaptionSize.cy;
 
   Canvas.Font.Assign(Font);
+
+  if not Enabled then Canvas.Font.Color := FDisabledTextColor;
 
 
   if CaptionSize.CX > ClientWidth - RightCaptionSize.CX - 2 then CaptionSize.CX := ClientWidth - RightCaptionSize.CX - 2;
@@ -287,7 +357,7 @@ begin
     ClientWidth, RightCaptionTop + xRightCaptionHeight
   );
 
-  if FAutoHeight then
+  if (FAutoHeight) and (Align <> alLeft) and (Align <> alRight) and (Align <> alClient) then
     if CaptionRect.Height > RightCaptionRect.Height then Self.Height := CaptionRect.Height
     else Self.Height := RightCaptionRect.Height;
 
@@ -303,11 +373,8 @@ begin
   // --------------------- Caption text ----------------------
   if Caption <> '' then
   begin
-//    Canvas.Brush.Style := bsSolid;
-//    Canvas.Brush.Color := clWhite;
-//    Canvas.FillRect(CaptionRect);
-//    Canvas.Brush.Style := bsClear;
-    {$IFDEF MSWINDOWS}Windows.{$ENDIF}DrawText(
+    //{$IFDEF MSWINDOWS}Windows.{$ENDIF}
+    DrawText(
       Canvas.Handle, PChar(Caption), Length(Caption), CaptionRect, DT_LEFT or DT_END_ELLIPSIS or DT_EXPANDTABS or DT_NOCLIP
     );
   end;
@@ -318,9 +385,17 @@ begin
   begin
 
     Font.Assign(RightCaptionFont);
-
-    clBg := FRightCaptionColor;
-    clPen := FRightCaptionBorderColor;
+    if not Enabled then
+    begin
+      Font.Color := FRightCaptionDisabledTextColor;
+      clBg := FRightCaptionDisabledColor;
+      clPen := FRightCaptionDiabledBorderColor;
+    end
+    else
+    begin
+      clBg := FRightCaptionColor;
+      clPen := FRightCaptionBorderColor;
+    end;
 
     if (clBg <> clNone) or (clPen <> clNone) then
     begin
@@ -337,7 +412,8 @@ begin
       if clPen <> clNone then
       begin
         Pen.Style := psSolid;
-        Pen.Color := FRightCaptionBorderColor;
+        if Enabled then Pen.Color := FRightCaptionBorderColor
+        else Pen.Color := FRightCaptionDiabledBorderColor;
       end;
 
       Rectangle(RightCaptionRect);
@@ -350,7 +426,8 @@ begin
 
     RightCaptionRect.Top := RightCaptionRect.Top + FRightCaptionPosDeltaY;
 
-    {$IFDEF MSWINDOWS}Windows.{$ENDIF}DrawText(
+    //{$IFDEF MSWINDOWS}Windows.{$ENDIF}
+    DrawText(
       Canvas.Handle, PChar(FRightCaption), Length(FRightCaption), RightCaptionRect, DT_LEFT or DT_NOPREFIX or DT_EXPANDTABS or DT_NOCLIP
     );
 
@@ -367,56 +444,13 @@ begin
   if X1 < X2 then
   begin
     Canvas.Pen.Style := psSolid;
-    Canvas.Pen.Color := FLineColor;
+    if not Enabled then Canvas.Pen.Color := FDisabledLineColor
+    else Canvas.Pen.Color := FLineColor;
     Y := CaptionTop + Metric.tmHeight - Metric.tmDescent - 1 + LinePosDeltaY;
     PaintLine(X1, X2, Y);
   end;
 
 end;
-
-
-// jp
-//procedure DrawLineEx(Canvas: TCanvas; Rect: TRect; LineHeight: integer; bVerticalCenter: Boolean = True);
-//var
-//  OldWidth, LHeight, xhs: integer;
-//begin
-//  OldWidth := Canvas.Pen.Width;
-//  Canvas.Pen.Width := 1;
-//  LHeight := LineHeight;
-//
-//  if bVerticalCenter then xhs := (Rect.Height div 2) - (LineHeight div 2)
-//  else xhs := 0;
-//
-//  while LHeight >= 0 do
-//  begin
-//    Dec(LHeight);
-//    Canvas.MoveTo(Rect.Left, Rect.Top + xhs);
-//    Canvas.LineTo(Rect.Right, Rect.Top + xhs);
-//    Inc(Rect.Top);
-//  end;
-//
-//  Canvas.Pen.Width := OldWidth;
-//end;
-
-//procedure TJPRDoubleLineLabel.PaintLine(X1, X2, Y: Integer);
-//var
-//  R: TRect;
-//begin
-//  R.Left := X1;
-//  R.Right := X2;
-//  R.Top := Y - 0;
-//  R.Bottom := Y + 0;
-//  case FLineStyle of
-//    dllsSolid: Canvas.Pen.Style := psSolid;
-//    dllsDash: Canvas.Pen.Style := psDash;
-//    dllsDot: Canvas.Pen.Style := psDot;
-//  end;
-//
-//  if FLineStyle <> dllsNone then DrawLineEx(Canvas, R, 0, True);
-//  if Assigned(FOnDrawLine) then FOnDrawLine(Self, Canvas, X1, X2, Y);
-//end;
-
-
 
 procedure TJppDoubleLineLabel.PaintLine(X1, X2, Y: Integer);
 var
@@ -443,7 +477,7 @@ begin
         X := X2 - 1;
         while X >= X1 do
         begin
-          Canvas.Pixels[X, Y] := FLineColor;
+          Canvas.Pixels[X, Y] := Canvas.Pen.Color; // FLineColor;
           Dec(X, FLinePeriod);
         end;
       end;
@@ -485,10 +519,32 @@ begin
   Invalidate;
 end;
 
+procedure TJppDoubleLineLabel.SetRightCaptionDiabledBorderColor(const Value: TColor);
+begin
+  FRightCaptionDiabledBorderColor := Value;
+  if not Enabled then Invalidate;
+end;
+
+procedure TJppDoubleLineLabel.SetRightCaptionDisabledColor(const Value: TColor);
+begin
+  FRightCaptionDisabledColor := Value;
+  if not Enabled then Invalidate;
+end;
+
+procedure TJppDoubleLineLabel.SetRightCaptionDisabledTextColor(const Value: TColor);
+begin
+  FRightCaptionDisabledTextColor := Value;
+  if not Enabled then Invalidate;
+end;
+
 procedure TJppDoubleLineLabel.SetRightCaptionFont(const Value: TFont);
 begin
-  FRightCaptionFont := Value;
-  Invalidate;
+  //FRightCaptionFont := Value;
+  if Assigned(FRightCaptionFont) and Assigned(Value) then
+  begin
+    FRightCaptionFont.Assign(Value);
+    Invalidate;
+  end;
 end;
 
 procedure TJppDoubleLineLabel.SetRightCaptionPosDeltaY(const Value: ShortInt);
@@ -515,6 +571,18 @@ begin
   if FAutoHeight = Value then Exit;
   FAutoHeight := Value;
   Invalidate;
+end;
+
+procedure TJppDoubleLineLabel.SetDisabledLineColor(const Value: TColor);
+begin
+  FDisabledLineColor := Value;
+  if not Enabled then Invalidate;
+end;
+
+procedure TJppDoubleLineLabel.SetDisabledTextColor(const Value: TColor);
+begin
+  FDisabledTextColor := Value;
+  if not Enabled then Invalidate;
 end;
 
 procedure TJppDoubleLineLabel.SetLayout(Value: TTextLayout);
